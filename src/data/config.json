@@ -1,0 +1,16 @@
+{
+    "STARTING_CURRENCY": 10,
+    "DAILY_CURRENCY_MIN": 10,
+    "DAILY_CURRENCY_MAX": 20,
+    "STARTING_ITEMS": [
+        {
+            "item_id": "welcome_coffee",
+            "title": "ウェルカムコーヒー",
+            "description": "友カフェにようこそ！香り高い一杯でスタート☕",
+            "rarity": "ノーマル",
+            "quantity": 1
+        }
+    ],
+    "CURRENCY_EMOJI": "<:small_beans:1420941621666648234>",
+    "DEFAULT_ITEM_IMAGE_URL": "https://i.imgur.com/uv8oiH9.png"
+}
