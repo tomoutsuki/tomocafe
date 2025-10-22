@@ -33,7 +33,6 @@ const Shop = {
         const user = await User.findOne({ user_id: interaction.user.id });
         if (!user) { console.log("User Not Found"); return; }
 
-        console.log(interaction.member)
         let nickname = interaction.member ? (interaction.member.nickname || interaction.member.displayName || interaction.user.username) : interaction.user.username;
 
         // 合計金額の計算
@@ -47,14 +46,16 @@ const Shop = {
         user.beans -= totalValue;
 
         // ユーザーがアイテムを既に持っているか確認
-        let itemObject = user.items.find(({ item_id })=> item_id == item_id.toString());
+        let itemObject = user.items.find(item => item.item_id == item_id);
 
-        if (!itemObject) {
+        if (typeof itemObject === 'undefined') {
+            console.log("Item not found in user inventory, adding new item.");
             // アイテムを持っていない場合、新規追加
-            user.items.push({
-                item_id: item._id,
+            itemObject = {
+                item_id: item_id,
                 quantity: amount
-            });
+            };
+            user.items.push(itemObject);
         } else {
             // 既に持っている場合、数量を更新
             itemObject.quantity += amount;
@@ -62,6 +63,7 @@ const Shop = {
 
         // データベースの情報を更新
         await user.save();
+
 
         /*ログ*/ console.log(`${nickname} successfully bought ${amount} ${item.title} for ${totalValue} beans. (User Beans Left: ${user.beans})`);
 

@@ -15,6 +15,11 @@ const config = JSON.parse(rawConfig);
 module.exports = async (message, item_id) => {
     
     itemInfo = await ItemMaster.findOne({ item_id : item_id});
+    if (typeof itemInfo === 'undefined' || itemInfo === null) {
+        await message.reply('指定されたアイテムIDのアイテムが見つかりません。');
+        return;
+    }
+    
     itemShopEmbed = new EmbedBuilder()
         .setColor(0xaa502f)
         .setTitle(itemInfo.title)

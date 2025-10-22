@@ -20,28 +20,58 @@ module.exports = async (message) => {
     let nickname = message.member ? (message.member.nickname || message.member.displayName || message.user.username) : message.user.username;
     let avatarURL = message.member.displayAvatarURL();
 
+    // Fetch user data from database
+    const user = await Member.findOne({ user_id: message.author.id });
     
+    if (!user) {
+        await message.reply('ユーザーデータが見つかりません。先に `!register` を実行してください。');
+        return;
+    }
+
+    // Build item names and quantities strings
+    let itemNames = '';
+    let itemQuantities = '';
+    
+    if (user.items && user.items.length > 0) {
+        // Fetch all item details from ItemMaster
+        for (const item of user.items) {
+            const itemInfo = await ItemMaster.findOne({ item_id: item.item_id });
+            
+            if (itemInfo) {
+                itemNames += `📦 ${itemInfo.title}\n`;
+                itemQuantities += `｜ ×${item.quantity}\n`;
+            }
+        }
+        
+        // Remove trailing newlines
+        itemNames = itemNames.trim();
+        itemQuantities = itemQuantities.trim();
+    } else {
+        // No items in inventory
+        itemNames = 'アイテムがありません';
+        itemQuantities = '—';
+    }
 
     const inventoryEmbed = new EmbedBuilder()
         .setAuthor({
-            name: " ",
+            name: nickname,
             iconURL: avatarURL,
         })
-        .setTitle(nickname)
-        .setDescription("インベントリ\n· · ────── ꒰ঌ·✦·໒꒱ ────── · ·")
+        .setTitle(" ")
+        .setDescription(`‎　　　..インベントリ..\n· · ────── ꒰ঌ·✦·໒꒱ ────── · ·`)
         .addFields(
             {
             name: "アイテム",
-            value: "☕ プレーンカプチーノ\n☕ プレーンコーヒーパウダー",
+            value: itemNames,
             inline: true
             },
             {
-            name: "所有個数",
-            value: "×3\n×2",
+            name: "｜所有個数",
+            value: itemQuantities,
             inline: true
             },
         )
-        .setThumbnail(avatarURL)
+        //.setThumbnail(avatarURL)
         .setColor("#906ca7")
         .setFooter({
             text: "Tomocafe BOT v.0.0.1",

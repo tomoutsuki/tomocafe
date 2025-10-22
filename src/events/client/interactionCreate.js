@@ -1,5 +1,5 @@
 const fs = require('fs');
-const Shop = require('../../game/shopManager');
+const Shop = require('../../game/shopmanager');
 
 module.exports = {
     name: "interactionCreate",
