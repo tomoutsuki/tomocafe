@@ -10,13 +10,6 @@ module.exports = async (message) => {
 		// ユーザー情報の取得
 		let user = await User.findOne({ user_id: message.author.id });
 
-		if (!user) {
-			// まだ登録されていない場合の処理
-			await message.reply({ content: `あなたはまだ登録していないようです！ **『!register』** コマンドを使ってみてください！` });
-			return;
-
-		}
-
 		// ユーザーの持ってるコーヒー豆数を返信
 		await message.reply({ content: `あなたのコーヒー豆残高は ˚﹢.${config.CURRENCY_EMOJI}×${user.beans} .˚﹢ です！✨` });
 

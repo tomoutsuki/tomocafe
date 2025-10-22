@@ -16,10 +16,9 @@ module.exports = async (message, item_id) => {
 
         let user = await User.findOne({ user_id: message.author.id });
         if (!user) {
-			// まだ登録されていない場合の処理
-			await message.reply({ content: `あなたはまだ登録していないようです！ **『!register』** コマンドを使ってみてください！` });
+			// ユーザーが見つからない場合の処理
+			await message.reply({ content: `あなたはまだ登録されていません。先に登録が必要なコマンドを実行してください。` });
 			return;
-
 		}
         // アイテムをユーザーに付与
         user.items.push({

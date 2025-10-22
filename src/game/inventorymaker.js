@@ -22,11 +22,6 @@ module.exports = async (message) => {
 
     // Fetch user data from database
     const user = await Member.findOne({ user_id: message.author.id });
-    
-    if (!user) {
-        await message.reply('ユーザーデータが見つかりません。先に `!register` を実行してください。');
-        return;
-    }
 
     // Build item names and quantities strings
     let itemNames = '';

@@ -10,13 +10,6 @@ module.exports = async (message) => {
 		// ユーザー情報の取得
 		let user = await User.findOne({ user_id: message.author.id });
 
-		if (!user) {
-			// まだ登録されていない場合の処理
-			await message.reply({ content: `あなたはまだ登録していないようです！ **『!register』** コマンドを使ってみてください！` });
-			return;
-
-		}
-
 		// デイリー報酬の付与
 		const now = new Date();
 		if (user.last_daily_claim) {

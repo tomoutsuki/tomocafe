@@ -14,6 +14,10 @@ const client = new Client({ intents: [
 // ユーザーデータベースモデル
 const User = require('./models/User');
 
+// 設定ファイル
+const rawConfig = fs.readFileSync('./src/data/config.json');
+const config = JSON.parse(rawConfig);
+
 // 管理者コマンド
 const Citem     = require('./helpers/admin/citem');
 const Cshop     = require('./helpers/admin/cshop');
@@ -26,7 +30,6 @@ const Wadai     = require('./helpers/wadai.js');
 const Shinya    = require('./helpers/shinya.js');
 
 // 登録が必要なコマンド
-const Register  = require('./helpers/register.js');
 const Daily     = require('./helpers/daily.js');
 const Balance   = require('./helpers/balance.js');
 const Inventory = require('./helpers/inventory.js');
@@ -34,6 +37,7 @@ const Inventory = require('./helpers/inventory.js');
 client.commands = new Collection();
 client.commandArray = [];
 
+// 関数の自動読み込み
 const functionFolders = fs.readdirSync('./src/functions');
 for (const folder of functionFolders) {
     const functionFiles = fs
@@ -44,6 +48,7 @@ for (const folder of functionFolders) {
             
 }
 
+// MongoDBへ接続
 mongoose
     .connect(process.env.MONGO_URI)
     .then(() => {
@@ -51,9 +56,11 @@ mongoose
     })
     .catch((error) => console.error(error));
 
+
+// メッセージ受信時の処理
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
-    if (!message.content.startsWith('!')) return;
+    if (!message.content.startsWith('!') && !message.content.startsWith('！')) return;
 
     const [command, ...args] = message.content.substring(1).split(' ');
 
@@ -63,14 +70,17 @@ client.on('messageCreate', async (message) => {
     // 登録が必要ないコマンド
     switch (command.toUpperCase()) {
         case "MENU":
+        case "メニュー":
             await Menu(message);
             break;
 
         case "WADAI":
+        case "話題":
             await Wadai(message);
             break;
 
         case "SHINYA":
+        case "深夜":
             await Shinya(message);
             break;
 
@@ -79,38 +89,35 @@ client.on('messageCreate', async (message) => {
                 content: 'PONGだよ!'
             });
             break;
+
         default:
             break;
     }
 
+    // 登録が必要なコマンドの場合、自動登録を確認
     if (!(await isRegistered(message.author.id))) {
-        await message.reply({ content: `あなたはまだ登録されていないようです！ **『!register』** コマンドを使ってみてください！` });
-        return;
+        await autoRegister(message.author.id, message);
     }
 
     // 登録が必要なコマンド
     switch (command.toUpperCase()) {
-        case "REGISTER":
-            await Register(message);
-            break;
-
         case "DAILY":
+        case "デイリー":
+        case "日給":
             await Daily(message);
             break;
 
         case "INVENTORY":
+        case "インベントリー":
             await Inventory(message);
             break;
 
         case "BALANCE":
+        case "バランス":
+        case "残高":
             await Balance(message);
             break;
 
-        case "PING":
-            await message.reply({
-                content: 'PONGだよ!'
-            });
-            break;
         default:
             break;
     }
@@ -159,4 +166,23 @@ client.login(process.env.BOT_TOKEN);
 async function isRegistered(user_id) {
     let user = await User.findOne({ user_id: user_id });
     return (typeof user !== 'undefined' && user !== null);
+}
+
+// 自動登録関数
+async function autoRegister(user_id, message) {
+    try {
+        // 新規ユーザー作成
+        const user = new User({
+            user_id: user_id,
+            beans: config.STARTING_CURRENCY,
+            items: config.STARTING_ITEMS
+        });
+
+        await user.save();
+
+        // 歓迎メッセージ
+        await message.reply({ content: `☕ ようこそ **友カフェ** へ！ あなたには「ウェルカムコーヒー」と${config.STARTING_CURRENCY}豆がプレゼントされました！` });
+    } catch (err) {
+        console.error("ユーザー自動登録時のエラー:", err);
+    }
 }

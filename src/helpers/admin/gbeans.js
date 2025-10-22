@@ -17,10 +17,9 @@ module.exports = async (message, userMention, quantity) => {
     try {
         let user = await User.findOne({ user_id: user_id });
         if (!user) {
-            // まだ登録されていない場合の処理
-            await message.reply({ content: `あなたはまだ登録されていないようです！ **『!register』** コマンドを使ってみてください！` });
+            // ユーザーが見つからない場合の処理
+            await message.reply({ content: `このユーザーはまだ登録されていません。先にそのユーザーに登録が必要なコマンドを実行してもらってください。` });
             return;
-
         }
         user.beans += parseInt(quantity);
         await user.save();
