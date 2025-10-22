@@ -21,6 +21,8 @@ const Gitem     = require('./helpers/admin/gitem');
 const Register  = require('./helpers/register.js');
 const Daily     = require('./helpers/daily.js');
 const Menu      = require('./helpers/menu.js');
+const Wadai     = require('./helpers/wadai.js');
+const Shinya    = require('./helpers/shinya.js');
 
 client.commands = new Collection();
 client.commandArray = [];
@@ -62,6 +64,14 @@ client.on('messageCreate', async (message) => {
 
         case "DAILY":
             await Daily(message);
+            break;
+
+        case "WADAI":
+            await Wadai(message);
+            break;
+
+        case "SHINYA":
+            await Shinya(message);
             break;
 
         case "PING":

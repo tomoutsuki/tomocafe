@@ -74,10 +74,11 @@ const Shop = {
                 { name: " ", value: `${config.CURRENCY_EMOJI}×${user.beans}`, inline: true}
             );
 
-        await interaction.channel.send({
+        await interaction.reply({
             content: "ㅤ",
             embeds: [ buyEmbed ]
         });
+        
     },
 }
 
