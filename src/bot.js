@@ -11,19 +11,23 @@ const client = new Client({ intents: [
     GatewayIntentBits.GuildMembers
 ]});
 
+// ユーザーデータベースモデル
+const User = require('./models/User');
+
 // 管理者コマンド
 const Citem     = require('./helpers/admin/citem');
 const Cshop     = require('./helpers/admin/cshop');
 const Gbeans    = require('./helpers/admin/gbeans');
 const Gitem     = require('./helpers/admin/gitem');
 
-// 一般ユーザーコマンド
-const Register  = require('./helpers/register.js');
-const Daily     = require('./helpers/daily.js');
+// 登録が必要ないコマンド
 const Menu      = require('./helpers/menu.js');
 const Wadai     = require('./helpers/wadai.js');
 const Shinya    = require('./helpers/shinya.js');
 
+// 登録が必要なコマンド
+const Register  = require('./helpers/register.js');
+const Daily     = require('./helpers/daily.js');
 const Balance   = require('./helpers/balance.js');
 const Inventory = require('./helpers/inventory.js');
 
@@ -56,17 +60,10 @@ client.on('messageCreate', async (message) => {
     // Command format:
     // !<command> <args[0]> <args[1]> ...
 
+    // 登録が必要ないコマンド
     switch (command.toUpperCase()) {
         case "MENU":
             await Menu(message);
-            break;
-
-        case "REGISTER":
-            await Register(message);
-            break;
-
-        case "DAILY":
-            await Daily(message);
             break;
 
         case "WADAI":
@@ -75,6 +72,30 @@ client.on('messageCreate', async (message) => {
 
         case "SHINYA":
             await Shinya(message);
+            break;
+
+        case "PING":
+            await message.reply({
+                content: 'PONGだよ!'
+            });
+            break;
+        default:
+            break;
+    }
+
+    if (!(await isRegistered(message.author.id))) {
+        await message.reply({ content: `あなたはまだ登録されていないようです！ **『!register』** コマンドを使ってみてください！` });
+        return;
+    }
+
+    // 登録が必要なコマンド
+    switch (command.toUpperCase()) {
+        case "REGISTER":
+            await Register(message);
+            break;
+
+        case "DAILY":
+            await Daily(message);
             break;
 
         case "INVENTORY":
@@ -94,7 +115,7 @@ client.on('messageCreate', async (message) => {
             break;
     }
 
-    
+    // 管理者コマンド
     switch (command.toUpperCase()) {
         case "CITEM":
             // args [item_id, title, description, rarity, image_url, market_price]
@@ -133,3 +154,9 @@ client.handleEvents();
 client.handleCommands();
 
 client.login(process.env.BOT_TOKEN);
+
+// ユーザー登録済みか確認する関数
+async function isRegistered(user_id) {
+    let user = await User.findOne({ user_id: user_id });
+    return (typeof user !== 'undefined' && user !== null);
+}
