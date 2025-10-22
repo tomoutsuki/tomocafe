@@ -24,6 +24,9 @@ const Menu      = require('./helpers/menu.js');
 const Wadai     = require('./helpers/wadai.js');
 const Shinya    = require('./helpers/shinya.js');
 
+const Balance   = require('./helpers/balance.js');
+const Inventory = require('./helpers/inventory.js');
+
 client.commands = new Collection();
 client.commandArray = [];
 
@@ -72,6 +75,14 @@ client.on('messageCreate', async (message) => {
 
         case "SHINYA":
             await Shinya(message);
+            break;
+
+        case "INVENTORY":
+            await Inventory(message);
+            break;
+
+        case "BALANCE":
+            await Balance(message);
             break;
 
         case "PING":
