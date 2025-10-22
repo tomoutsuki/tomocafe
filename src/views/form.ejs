@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= action === 'create' ? '新規作成' : '編集' %> - 友カフェ Item Master</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>☕ 友カフェ - Item Master</h1>
+            <p class="subtitle"><%= action === 'create' ? '新しいアイテムを作成' : 'アイテムを編集' %></p>
+        </header>
+
+        <div class="form-container">
+            <form action="<%= action === 'create' ? '/items' : '/items/' + item._id %>" method="POST">
+                <div class="form-group">
+                    <label for="item_id">アイテムID *</label>
+                    <input 
+                        type="text" 
+                        id="item_id" 
+                        name="item_id" 
+                        value="<%= item ? item.item_id : '' %>" 
+                        required
+                        placeholder="例: coffee_latte"
+                        <%= action === 'edit' ? 'readonly' : '' %>
+                    >
+                    <small>英数字とアンダースコアのみ使用可能</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="title">タイトル *</label>
+                    <input 
+                        type="text" 
+                        id="title" 
+                        name="title" 
+                        value="<%= item ? item.title : '' %>" 
+                        required
+                        placeholder="例: カフェラテ"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="description">説明 *</label>
+                    <textarea 
+                        id="description" 
+                        name="description" 
+                        rows="4" 
+                        required
+                        placeholder="例: まろやかなミルクとエスプレッソの絶妙なハーモニー☕"
+                    ><%= item ? item.description : '' %></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="rarity">レアリティ *</label>
+                    <select id="rarity" name="rarity" required>
+                        <option value="ノーマル" <%= item && item.rarity === 'ノーマル' ? 'selected' : '' %>>ノーマル</option>
+                        <option value="レア" <%= item && item.rarity === 'レア' ? 'selected' : '' %>>レア</option>
+                        <option value="スーパーレア" <%= item && item.rarity === 'スーパーレア' ? 'selected' : '' %>>スーパーレア</option>
+                        <option value="ウルトラレア" <%= item && item.rarity === 'ウルトラレア' ? 'selected' : '' %>>ウルトラレア</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="image_url">画像URL</label>
+                    <input 
+                        type="url" 
+                        id="image_url" 
+                        name="image_url" 
+                        value="<%= item ? item.image_url : '' %>"
+                        placeholder="https://example.com/image.png"
+                    >
+                    <small>空白の場合はデフォルト画像が使用されます</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="market_price">マーケット価格 (豆)</label>
+                    <input 
+                        type="number" 
+                        id="market_price" 
+                        name="market_price" 
+                        value="<%= item ? item.market_price : 0 %>"
+                        min="0"
+                        placeholder="0"
+                    >
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">
+                        <%= action === 'create' ? '✅ 作成' : '💾 保存' %>
+                    </button>
+                    <a href="/" class="btn btn-secondary">❌ キャンセル</a>
+                </div>
+            </form>
+        </div>
+
+        <% if (item && item.image_url) { %>
+            <div class="preview">
+                <h3>プレビュー</h3>
+                <img src="<%= item.image_url %>" alt="Preview" style="max-width: 300px; border-radius: 8px;">
+            </div>
+        <% } %>
+    </div>
+
+    <script src="/js/form.js"></script>
+</body>
+</html>

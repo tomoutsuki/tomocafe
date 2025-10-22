@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>友カフェ - Item Master CRUD</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>☕ 友カフェ - Item Master</h1>
+            <p class="subtitle">アイテム管理システム</p>
+        </header>
+
+        <div class="actions">
+            <a href="/items/new" class="btn btn-primary">➕ 新しいアイテムを追加</a>
+        </div>
+
+        <% if (items.length === 0) { %>
+            <div class="empty-state">
+                <p>まだアイテムがありません。</p>
+                <p>上のボタンから新しいアイテムを追加してください。</p>
+            </div>
+        <% } else { %>
+            <div class="items-grid">
+                <% items.forEach(item => { %>
+                    <div class="item-card">
+                        <div class="item-header">
+                            <h2><%= item.title %></h2>
+                            <span class="rarity <%= item.rarity.replace('レア', '') %>"><%= item.rarity %></span>
+                        </div>
+                        
+                        <div class="item-body">
+                            <% if (item.image_url) { %>
+                                <div class="item-image">
+                                    <img src="<%= item.image_url %>" alt="<%= item.title %>" onerror="this.src='https://i.imgur.com/uv8oiH9.png'">
+                                </div>
+                            <% } %>
+                            
+                            <div class="item-info">
+                                <p class="item-id"><strong>ID:</strong> <%= item.item_id %></p>
+                                <p class="item-description"><%= item.description %></p>
+                                <p class="item-price"><strong>価格:</strong> <%= item.market_price %> 豆</p>
+                            </div>
+                        </div>
+                        
+                        <div class="item-actions">
+                            <a href="/items/<%= item._id %>/edit" class="btn btn-secondary">✏️ 編集</a>
+                            <form action="/items/<%= item._id %>/delete" method="POST" style="display: inline;" onsubmit="return confirm('本当にこのアイテムを削除しますか？');">
+                                <button type="submit" class="btn btn-danger">🗑️ 削除</button>
+                            </form>
+                        </div>
+                    </div>
+                <% }) %>
+            </div>
+        <% } %>
+
+        <footer>
+            <p>Total Items: <%= items.length %></p>
+        </footer>
+    </div>
+</body>
+</html>
