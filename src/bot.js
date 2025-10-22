@@ -108,7 +108,7 @@ client.on('messageCreate', async (message) => {
             break;
 
         case "INVENTORY":
-        case "インベントリー":
+        case "インベントリ":
             await Inventory(message);
             break;
 
