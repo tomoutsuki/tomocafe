@@ -24,8 +24,7 @@ module.exports = async (message) => {
     const user = await Member.findOne({ user_id: message.author.id });
 
     // Build item names and quantities strings
-    let itemNames = '';
-    let itemQuantities = '';
+    let itemList = '· · ────── ꒰ঌ·✦·໒꒱ ────── · ·\n\n';
     
     if (user.items && user.items.length > 0) {
         // Fetch all item details from ItemMaster
@@ -33,18 +32,15 @@ module.exports = async (message) => {
             const itemInfo = await ItemMaster.findOne({ item_id: item.item_id });
             
             if (itemInfo) {
-                itemNames += `📦 ${itemInfo.title}\n`;
-                itemQuantities += `｜ ×${item.quantity}\n`;
+                itemList += `📦 ${itemInfo.title}  ×${item.quantity}\n`;
             }
         }
         
-        // Remove trailing newlines
-        itemNames = itemNames.trim();
-        itemQuantities = itemQuantities.trim();
+        itemList += `\n· · ────── ꒰ঌ·✦·໒꒱ ────── · ·`;
+        
     } else {
         // No items in inventory
-        itemNames = 'アイテムがありません';
-        itemQuantities = '—';
+        itemList = 'アイテムがありません';
     }
 
     const inventoryEmbed = new EmbedBuilder()
@@ -53,18 +49,13 @@ module.exports = async (message) => {
             iconURL: avatarURL,
         })
         .setTitle(" ")
-        .setDescription(`‎　　　..インベントリ..\n· · ────── ꒰ঌ·✦·໒꒱ ────── · ·`)
+        .setDescription(`· · ────── ꒰ঌ·✦·໒꒱ ────── · ·`)
         .addFields(
             {
-            name: "アイテム",
-            value: itemNames,
+            name: "‎　　　.インベントリ.\n",
+            value: itemList,
             inline: true
-            },
-            {
-            name: "｜所有個数",
-            value: itemQuantities,
-            inline: true
-            },
+            }
         )
         //.setThumbnail(avatarURL)
         .setColor("#906ca7")

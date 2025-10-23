@@ -12,21 +12,20 @@ module.exports = async (message, item_id) => {
 	try {
 		// アイテムマスターの取得
 		let item = await ItemMaster.findOne({ item_id: item_id });
-        if (!item) return; // 既に存在しない場合は何もしない
+        if (!item) return; // 存在しない場合は何もしない
 
+        // ユーザーの取得
         let user = await User.findOne({ user_id: message.author.id });
         if (!user) {
 			// ユーザーが見つからない場合の処理
 			await message.reply({ content: `あなたはまだ登録されていません。先に登録が必要なコマンドを実行してください。` });
 			return;
 		}
+
         // アイテムをユーザーに付与
         user.items.push({
             item_id: item.item_id,
-            title: item.title,
-            description: item.description,
-            rarity: item.rarity,
-            obtained_at: new Date()
+            quantity: item.quantity++
         });
 
         await user.save();
