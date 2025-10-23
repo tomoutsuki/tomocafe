@@ -122,6 +122,12 @@ client.on('messageCreate', async (message) => {
             break;
     }
 
+    // 管理者コマンドの場合、自動登録を確認
+    if (!(await isAdministrator(message))) {
+        message.reply({ content: "このコマンドは管理者専用です。" });
+        return;
+    }
+
     // 管理者コマンド
     switch (command.toUpperCase()) {
         case "CITEM":
@@ -166,6 +172,11 @@ client.login(process.env.BOT_TOKEN);
 async function isRegistered(user_id) {
     let user = await User.findOne({ user_id: user_id });
     return (typeof user !== 'undefined' && user !== null);
+}
+
+// 管理者か確認する関数
+async function isAdministrator(message) {
+    return message.member.roles.cache.some(role => role.name === config.ADMIN_ROLE_NAME);
 }
 
 // 自動登録関数

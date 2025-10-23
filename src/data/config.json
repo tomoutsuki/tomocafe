@@ -2,6 +2,7 @@
     "STARTING_CURRENCY": 10,
     "DAILY_CURRENCY_MIN": 10,
     "DAILY_CURRENCY_MAX": 20,
+    "ADMIN_ROLE_NAME": "BOT管理者",
     "STARTING_ITEMS": [
         {
             "item_id": "welcome_coffee",
