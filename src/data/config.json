@@ -6,9 +6,6 @@
     "STARTING_ITEMS": [
         {
             "item_id": "welcome_coffee",
-            "title": "ウェルカムコーヒー",
-            "description": "友カフェにようこそ！香り高い一杯でスタート☕",
-            "rarity": "ノーマル",
             "quantity": 1
         }
     ],

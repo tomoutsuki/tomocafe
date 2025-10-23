@@ -36,7 +36,7 @@ module.exports = async (message) => {
             }
         }
         
-        itemList += `\n· · ────── ꒰ঌ·✦·໒꒱ ────── · ·`;
+        itemList += `\n· · ──────────────────── · ·`;
         
     } else {
         // No items in inventory

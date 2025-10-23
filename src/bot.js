@@ -94,7 +94,8 @@ client.on('messageCreate', async (message) => {
             break;
     }
 
-    // 登録が必要なコマンドの場合、自動登録を確認
+    // 登録が必要なコマンドの場合、登録済みか確認（バックアップとして）
+    // 通常はサーバー参加時に自動登録されるが、万が一の場合に備える
     if (!(await isRegistered(message.author.id))) {
         await autoRegister(message.author.id, message);
     }
