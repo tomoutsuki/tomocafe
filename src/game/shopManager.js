@@ -49,7 +49,6 @@ const Shop = {
         let itemObject = user.items.find(item => item.item_id == item_id);
 
         if (typeof itemObject === 'undefined') {
-            console.log("Item not found in user inventory, adding new item.");
             // アイテムを持っていない場合、新規追加
             itemObject = {
                 item_id: item_id,

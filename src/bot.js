@@ -149,7 +149,7 @@ client.on('messageCreate', async (message) => {
 
         case "GITEM":
             // args [user_id, item_id]
-            await Gitem(message, args[0]);
+            await Gitem(message, args[0], args[1]);
             break;
 
         default:
