@@ -6,12 +6,15 @@ const config = JSON.parse(rawConfig);
 
 module.exports = async (message, item) => {
 
-    console.log(item);
 	try {
 		// アイテムマスターの取得
 		let query = await ItemMaster.findOne({ item_id: item.item_id });
-        if (query) return; // 既に存在する場合は何もしない
-
+        if (query) {
+            // 既に存在する場合は何もしない
+            console.log("アイテムは既に存在します: " + item.item_id );
+            await message.reply({ content: `既に存在するアイテムIDです: ${item.item_id}` });
+            return; 
+        }
 
         //   レアリティ―表記が正しくない場合はエラーを返す
         const validRarities = ['ノーマル', 'レア', 'スーパーレア', 'ウルトラレア'];
