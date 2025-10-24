@@ -23,6 +23,7 @@ const Citem     = require('./helpers/admin/citem');
 const Cshop     = require('./helpers/admin/cshop');
 const Gbeans    = require('./helpers/admin/gbeans');
 const Gitem     = require('./helpers/admin/gitem');
+const Guide     = require('./helpers/admin/guide');
 
 // 登録が必要ないコマンド
 const Menu      = require('./helpers/menu.js');
@@ -157,6 +158,10 @@ client.on('messageCreate', async (message) => {
         case "GITEM":
             // args [user_id, item_id]
             await Gitem(message, args[0], args[1]);
+            break;
+
+        case "GUIDE":
+            await Guide(message);
             break;
 
         default:
