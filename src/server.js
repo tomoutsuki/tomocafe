@@ -6,7 +6,8 @@ const mongoose = require('mongoose');
 const ItemMaster = require('./models/ItemMaster');
 
 const app = express();
-const PORT = process.env.WEB_PORT || 3000;
+// Heroku assigns a dynamic port via process.env.PORT; fall back to WEB_PORT or 3000 locally.
+const PORT = process.env.PORT || process.env.WEB_PORT || 3000;
 
 // Middleware
 app.set('view engine', 'ejs');
