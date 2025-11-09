@@ -1,2 +1,1 @@
-web: node src/server.js
-worker: node src/bot.js
+web: node src/combined.js
