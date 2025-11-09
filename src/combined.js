@@ -195,142 +195,41 @@ async function autoRegister(user_id, message) {
 }
 
 // ============================================================================
-// EXPRESS WEB SERVER SETUP (from server.js)
+// EXPRESS WEB SERVER SETUP (Minimal - Health Check Only)
 // ============================================================================
 
 const express = require('express');
-const bodyParser = require('body-parser');
-const path = require('path');
-const ItemMaster = require('./models/ItemMaster');
 
 const app = express();
 // Heroku requires binding to process.env.PORT
 const PORT = process.env.PORT || process.env.WEB_PORT || 3000;
 
-// Middleware
-app.set('view engine', 'ejs');
-app.set('views', path.join(__dirname, 'views'));
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(bodyParser.json());
-app.use(express.static(path.join(__dirname, 'public')));
+// Minimal middleware
+app.use(express.json());
 
-// Routes
-
-// Home page - List all items
-app.get('/', async (req, res) => {
-    try {
-        const items = await ItemMaster.find().sort({ item_id: 1 });
-        res.render('index', { items });
-    } catch (error) {
-        console.error('Error fetching items:', error);
-        res.status(500).send('Error fetching items');
-    }
+// Root endpoint - Simple status
+app.get('/', (req, res) => {
+    res.status(200).json({
+        service: 'Tomo Cafe Discord Bot',
+        status: 'running',
+        bot: client.isReady() ? 'connected' : 'disconnected'
+    });
 });
 
-// Create page - Show form to create new item
-app.get('/items/new', (req, res) => {
-    res.render('form', { item: null, action: 'create' });
-});
-
-// Create - POST new item
-app.post('/items', async (req, res) => {
-    try {
-        const { item_id, title, description, rarity, image_url, market_price } = req.body;
-        
-        const newItem = new ItemMaster({
-            item_id,
-            title,
-            description,
-            rarity,
-            image_url: image_url || undefined,
-            market_price: market_price ? parseInt(market_price) : 0
-        });
-        
-        await newItem.save();
-        res.redirect('/');
-    } catch (error) {
-        console.error('Error creating item:', error);
-        res.status(500).send('Error creating item: ' + error.message);
-    }
-});
-
-// Edit page - Show form to edit existing item
-app.get('/items/:id/edit', async (req, res) => {
-    try {
-        const item = await ItemMaster.findById(req.params.id);
-        if (!item) {
-            return res.status(404).send('Item not found');
-        }
-        res.render('form', { item, action: 'edit' });
-    } catch (error) {
-        console.error('Error fetching item:', error);
-        res.status(500).send('Error fetching item');
-    }
-});
-
-// Update - PUT/POST update item
-app.post('/items/:id', async (req, res) => {
-    try {
-        const { item_id, title, description, rarity, image_url, market_price } = req.body;
-        
-        await ItemMaster.findByIdAndUpdate(req.params.id, {
-            item_id,
-            title,
-            description,
-            rarity,
-            image_url: image_url || undefined,
-            market_price: market_price ? parseInt(market_price) : 0
-        });
-        
-        res.redirect('/');
-    } catch (error) {
-        console.error('Error updating item:', error);
-        res.status(500).send('Error updating item: ' + error.message);
-    }
-});
-
-// Delete - DELETE item
-app.post('/items/:id/delete', async (req, res) => {
-    try {
-        await ItemMaster.findByIdAndDelete(req.params.id);
-        res.redirect('/');
-    } catch (error) {
-        console.error('Error deleting item:', error);
-        res.status(500).send('Error deleting item');
-    }
-});
-
-// API endpoints for JSON responses
-app.get('/api/items', async (req, res) => {
-    try {
-        const items = await ItemMaster.find().sort({ item_id: 1 });
-        res.json(items);
-    } catch (error) {
-        console.error('Error fetching items:', error);
-        res.status(500).json({ error: 'Error fetching items' });
-    }
-});
-
-app.get('/api/items/:id', async (req, res) => {
-    try {
-        const item = await ItemMaster.findById(req.params.id);
-        if (!item) {
-            return res.status(404).json({ error: 'Item not found' });
-        }
-        res.json(item);
-    } catch (error) {
-        console.error('Error fetching item:', error);
-        res.status(500).json({ error: 'Error fetching item' });
-    }
-});
-
-// Health check endpoint for Heroku
+// Health check endpoint for Heroku and monitoring
 app.get('/health', (req, res) => {
     res.status(200).json({ 
         status: 'ok', 
         bot: client.isReady() ? 'connected' : 'disconnected',
+        uptime: process.uptime(),
+        memory: process.memoryUsage(),
         timestamp: new Date().toISOString()
     });
+});
+
+// Catch-all for undefined routes
+app.use((req, res) => {
+    res.status(404).json({ error: 'Endpoint not found' });
 });
 
 // ============================================================================
@@ -346,10 +245,10 @@ async function startApplication() {
         await mongoose.connect(process.env.MONGO_URI);
         console.log('✅ MongoDB Connected');
         
-        // Start Express Server
-        console.log(`🌐 Starting Web Server on port ${PORT}...`);
+        // Start Express Server (minimal health check only)
+        console.log(`🌐 Starting minimal web server on port ${PORT}...`);
         app.listen(PORT, () => {
-            console.log(`✅ Web Admin Panel running on port ${PORT}`);
+            console.log(`✅ Health check endpoint ready on port ${PORT}`);
         });
         
         // Start Discord Bot
