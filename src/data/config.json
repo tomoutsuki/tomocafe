@@ -2,7 +2,7 @@
     "STARTING_CURRENCY": 10,
     "DAILY_CURRENCY_MIN": 10,
     "DAILY_CURRENCY_MAX": 20,
-    "ADMIN_ROLE_NAME": "BOT管理者",
+    "ADMIN_ROLE_NAMES": ["BOT管理者", "このカフェの店長", "バイト店員"],
     "STARTING_ITEMS": [
         {
             "item_id": "welcome_coffee",

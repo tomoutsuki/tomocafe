@@ -182,7 +182,9 @@ async function isRegistered(user_id) {
 
 // 管理者か確認する関数
 async function isAdministrator(message) {
-    return message.member.roles.cache.some(role => role.name === config.ADMIN_ROLE_NAME);
+    return message.member.roles.cache.some(role => 
+        config.ADMIN_ROLE_NAMES.includes(role.name)
+    );
 }
 
 // 自動登録関数

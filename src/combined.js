@@ -71,26 +71,23 @@ client.on('messageCreate', async (message) => {
         case "MENU":
         case "メニュー":
             await Menu(message);
-            break;
+            return;
 
         case "WADAI":
         case "話題":
             await Wadai(message);
-            break;
+            return;
 
         case "SHINYA":
         case "深夜":
             await Shinya(message);
-            break;
+            return;
 
         case "PING":
             await message.reply({
                 content: 'PONGだよ!'
             });
-            break;
-
-        default:
-            break;
+            return;
     }
 
     // 登録が必要なコマンドの場合、登録済みか確認
@@ -104,32 +101,28 @@ client.on('messageCreate', async (message) => {
         case "デイリー":
         case "日給":
             await Daily(message);
-            break;
+            return;
 
         case "INVENTORY":
         case "インベントリ":
             await Inventory(message);
-            break;
+            return;
 
         case "BALANCE":
         case "バランス":
         case "残高":
             await Balance(message);
-            break;
-
-        default:
-            break;
+            return;
     }
 
-    // 管理者コマンドの場合、自動登録を確認
-    if (!(await isAdministrator(message))) {
-        message.reply({ content: "このコマンドは管理者専用です。" });
-        return;
-    }
+    
 
     // 管理者コマンド
     switch (command.toUpperCase()) {
         case "CITEM":
+            // 管理者コマンドの場合、管理者ロールがあるか確認
+            if (!(await isAdministrator(message))) return;
+
             let item = {
                 item_id: args[0],
                 title: args[1],
@@ -139,26 +132,35 @@ client.on('messageCreate', async (message) => {
                 market_price: args[5]
             };
             await Citem(message, item);
-            break;
+            return;
 
         case "CSHOP":
+            // 管理者コマンドの場合、管理者ロールがあるか確認
+            if (!(await isAdministrator(message))) return;
+
             await Cshop(message, args[0]);
-            break;
+            return;
 
         case "GBEANS":
+            // 管理者コマンドの場合、管理者ロールがあるか確認
+            if (!(await isAdministrator(message))) return;
+
             await Gbeans(message, args[0], args[1]);
-            break;
+            return;
 
         case "GITEM":
+            // 管理者コマンドの場合、管理者ロールがあるか確認
+            if (!(await isAdministrator(message))) return;
+
             await Gitem(message, args[0], args[1]);
-            break;
+            return;
 
         case "GUIDE":
-            await Guide(message);
-            break;
+            // 管理者コマンドの場合、管理者ロールがあるか確認
+            if (!(await isAdministrator(message))) return;
 
-        default:
-            break;
+            await Guide(message);
+            return;
     }
 });
 
@@ -173,7 +175,17 @@ async function isRegistered(user_id) {
 
 // 管理者か確認する関数
 async function isAdministrator(message) {
-    return message.member.roles.cache.some(role => role.name === config.ADMIN_ROLE_NAME);
+    // Check if user has any of the allowed admin roles
+    const hasAdminRole = message.member.roles.cache.some(role => 
+        config.ADMIN_ROLE_NAMES.includes(role.name)
+    );
+    
+    if (hasAdminRole) {
+        return true;
+    } else {
+        message.reply({ content: "このコマンドは管理者専用です。" });
+        return false;
+    }
 }
 
 // 自動登録関数
