@@ -1,7 +1,21 @@
-require('dotenv').config();
+const { appEnv, assertRequiredEnv, loadedEnvFile } = require('./config/environment');
 const fs = require('fs');
+const { connectToMongo, mongoose } = require('./config/mongo');
 
-const mongoose = require('mongoose');
+const shouldRegisterCommands = process.env.REGISTER_COMMANDS !== 'false';
+const commandScope = (process.env.COMMAND_SCOPE || 'guild').toLowerCase();
+const requiredEnv = ['BOT_TOKEN', 'MONGO_URI'];
+
+if (shouldRegisterCommands) {
+    requiredEnv.push('CLIENT_ID');
+    if (commandScope !== 'global') {
+        requiredEnv.push('GUILD_ID');
+    }
+}
+
+assertRequiredEnv(requiredEnv);
+
+console.log(`[bootstrap] Bot environment: ${appEnv}${loadedEnvFile ? ` (${loadedEnvFile})` : ''}`);
 
 const {Client, Collection, Events, GatewayIntentBits} = require('discord.js');
 const client = new Client({ intents: [
@@ -48,15 +62,6 @@ for (const folder of functionFolders) {
             require(`./functions/${folder}/${file}`)(client);
             
 }
-
-// MongoDBへ接続
-mongoose
-    .connect(process.env.MONGO_URI)
-    .then(() => {
-        console.log("Mongo Connected");
-    })
-    .catch((error) => console.error(error));
-
 
 // メッセージ受信時の処理
 client.on('messageCreate', async (message) => {
@@ -170,9 +175,6 @@ client.on('messageCreate', async (message) => {
 });
 
 client.handleEvents();
-client.handleCommands();
-
-client.login(process.env.BOT_TOKEN);
 
 // ユーザー登録済みか確認する関数
 async function isRegistered(user_id) {
@@ -205,3 +207,26 @@ async function autoRegister(user_id, message) {
         console.error("ユーザー自動登録時のエラー:", err);
     }
 }
+
+async function startBot() {
+    try {
+        console.log(`🚀 Starting bot process [${appEnv}]...`);
+
+        const mongoConnection = await connectToMongo();
+        console.log(`Mongo Connected via ${mongoConnection.connectionSource}`);
+
+        mongoose.connection.on('error', (error) => {
+            console.error('MongoDB connection error:', error);
+        });
+
+        await client.login(process.env.BOT_TOKEN);
+        console.log('Discord login completed');
+
+        await client.handleCommands();
+    } catch (error) {
+        console.error('Fatal startup error:', error);
+        process.exit(1);
+    }
+}
+
+startBot();

@@ -53,3 +53,17 @@
 ## 使用ツール
 友カフェちゃんは主にJavaScriptで開発しています。
 データベースはMongoDBを使用し、Discord.jsでAPI接続しています。
+
+## 開発環境と本番環境
+- ローカル開発は `.env.development` を優先して読み込みます。既存の `.env.dev` もそのまま使用できます。
+- 本番環境は Heroku Config Vars を前提にし、`APP_ENV=production` で起動します。
+- ローカルで開発用 Bot と Web 管理画面を起動する場合は `npm run dev` を使います。
+- Heroku の dev アプリは `develop` ブランチ、本番アプリは `main` ブランチからデプロイする構成にしてください。
+- Slash command 登録は既定で `GUILD_ID` 向けです。dev bot がまだそのサーバーに入っていない場合は `REGISTER_COMMANDS=false` にすると起動だけ先に確認できます。
+- ローカル環境で `mongodb+srv://` が `querySrv` で失敗する場合は、Atlas の Standard connection string を `MONGO_DIRECT_URI` に設定すると SRV DNS を回避できます。
+
+## 推奨ブランチ運用
+- `main`: 本番デプロイ専用
+- `develop`: 開発統合用。dev Heroku アプリのデプロイ元
+- `feature/*`: 個別作業ブランチ。`develop` にマージ
+- `hotfix/*`: 本番緊急修正。`main` と `develop` の両方に反映

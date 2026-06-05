@@ -4,9 +4,22 @@
  * Runs both Discord bot and Express web server in a single process
  */
 
-require('dotenv').config();
+const { appEnv, assertRequiredEnv, loadedEnvFile } = require('./config/environment');
 const fs = require('fs');
-const mongoose = require('mongoose');
+const { connectToMongo, mongoose } = require('./config/mongo');
+
+const shouldRegisterCommands = process.env.REGISTER_COMMANDS !== 'false';
+const commandScope = (process.env.COMMAND_SCOPE || 'guild').toLowerCase();
+const requiredEnv = ['BOT_TOKEN', 'MONGO_URI'];
+
+if (shouldRegisterCommands) {
+    requiredEnv.push('CLIENT_ID');
+    if (commandScope !== 'global') {
+        requiredEnv.push('GUILD_ID');
+    }
+}
+
+assertRequiredEnv(requiredEnv);
 
 // ============================================================================
 // DISCORD BOT SETUP (from bot.js)
@@ -165,7 +178,6 @@ client.on('messageCreate', async (message) => {
 });
 
 client.handleEvents();
-client.handleCommands();
 
 // ユーザー登録済みか確認する関数
 async function isRegistered(user_id) {
@@ -222,6 +234,7 @@ app.use(express.json());
 // Root endpoint - Simple status
 app.get('/', (req, res) => {
     res.status(200).json({
+        environment: appEnv,
         service: 'Tomo Cafe Discord Bot',
         status: 'running',
         bot: client.isReady() ? 'connected' : 'disconnected'
@@ -231,6 +244,7 @@ app.get('/', (req, res) => {
 // Health check endpoint for Heroku and monitoring
 app.get('/health', (req, res) => {
     res.status(200).json({ 
+        environment: appEnv,
         status: 'ok', 
         bot: client.isReady() ? 'connected' : 'disconnected',
         uptime: process.uptime(),
@@ -250,12 +264,15 @@ app.use((req, res) => {
 
 async function startApplication() {
     try {
-        console.log('🚀 Starting Tomo Cafe Combined Application...');
+        console.log(`🚀 Starting Tomo Cafe Combined Application [${appEnv}]...`);
+        if (loadedEnvFile) {
+            console.log(`📄 Loaded environment file: ${loadedEnvFile}`);
+        }
         
         // Connect to MongoDB (shared by both bot and web server)
         console.log('📦 Connecting to MongoDB...');
-        await mongoose.connect(process.env.MONGO_URI);
-        console.log('✅ MongoDB Connected');
+        const mongoConnection = await connectToMongo();
+        console.log(`✅ MongoDB Connected via ${mongoConnection.connectionSource}`);
         
         // Start Express Server (minimal health check only)
         console.log(`🌐 Starting minimal web server on port ${PORT}...`);
@@ -267,6 +284,8 @@ async function startApplication() {
         console.log('🤖 Starting Discord Bot...');
         await client.login(process.env.BOT_TOKEN);
         console.log('✅ Discord Bot Connected');
+
+        await client.handleCommands();
         
         console.log('🎉 All services started successfully!');
         

@@ -1,1 +1,1 @@
-web: node src/combined.js
+web: node src/combined.js --app-env=production

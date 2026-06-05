@@ -6,8 +6,14 @@
   "scripts": {
     "start": "concurrently \"node src/bot.js\" \"node src/server.js\"",
     "bot": "node src/bot.js",
+    "bot:dev": "node src/bot.js --app-env=development",
+    "bot:prod": "node src/bot.js --app-env=production",
     "web": "node src/server.js",
-    "dev": "concurrently \"node src/bot.js\" \"node src/server.js\""
+    "web:dev": "node src/server.js --app-env=development",
+    "web:prod": "node src/server.js --app-env=production",
+    "dev": "concurrently \"node src/bot.js --app-env=development\" \"node src/server.js --app-env=development\"",
+    "dev:combined": "node src/combined.js --app-env=development",
+    "prod:combined": "node src/combined.js --app-env=production"
   },
   "repository": {
     "type": "git",

@@ -1,9 +1,13 @@
-require('dotenv').config();
+const { appEnv, assertRequiredEnv, loadedEnvFile } = require('./config/environment');
 const express = require('express');
 const bodyParser = require('body-parser');
 const path = require('path');
-const mongoose = require('mongoose');
+const { connectToMongo } = require('./config/mongo');
 const ItemMaster = require('./models/ItemMaster');
+
+assertRequiredEnv(['MONGO_URI']);
+
+console.log(`[bootstrap] Web environment: ${appEnv}${loadedEnvFile ? ` (${loadedEnvFile})` : ''}`);
 
 const app = express();
 // Heroku assigns a dynamic port via process.env.PORT; fall back to WEB_PORT or 3000 locally.
@@ -17,10 +21,9 @@ app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Connect to MongoDB
-mongoose
-    .connect(process.env.MONGO_URI)
-    .then(() => {
-        console.log("Web Server: Mongo Connected");
+connectToMongo()
+    .then((mongoConnection) => {
+        console.log(`Web Server: Mongo Connected via ${mongoConnection.connectionSource}`);
     })
     .catch((error) => console.error("Web Server MongoDB Error:", error));
 
@@ -134,7 +137,14 @@ app.get('/api/items/:id', async (req, res) => {
     }
 });
 
+app.get('/health', (req, res) => {
+    res.json({
+        environment: appEnv,
+        status: 'ok'
+    });
+});
+
 // Start server
 app.listen(PORT, () => {
-    console.log(`🌐 Web Admin Panel running at http://localhost:${PORT}`);
+    console.log(`🌐 Web Admin Panel running at http://localhost:${PORT} [${appEnv}]`);
 });

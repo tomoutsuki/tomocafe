@@ -21,16 +21,23 @@ Your Item Master CRUD system is now ready to use.
 
 ## 🎯 How to Use
 
-### 1. Make sure your `.env` file has these variables:
+### 1. Make sure your development env file exists
+Use `.env.development` for local development. The app also supports the existing `.env.dev` name.
+
 ```env
-MONGO_URI=your_mongodb_connection_string
-BOT_TOKEN=your_discord_bot_token
+APP_ENV=development
+MONGO_URI=your_dev_mongodb_connection_string
+BOT_TOKEN=your_dev_discord_bot_token
+CLIENT_ID=your_dev_discord_application_id
+GUILD_ID=your_dev_discord_guild_id
 WEB_PORT=3000
 ```
 
-### 2. Start the application:
+Production should use Heroku Config Vars instead of a committed file.
+
+### 2. Start the development application:
 ```bash
-npm start
+npm run dev
 ```
 
 This will start:
@@ -67,13 +74,18 @@ http://localhost:3000
 
 Run only the bot:
 ```bash
-npm run bot
+npm run bot:dev
 ```
 
 Run only the web server:
 ```bash
-npm run web
+npm run web:dev
 ```
+
+### 4. Branch structure
+- `develop` -> development Heroku app
+- `main` -> production Heroku app
+- `feature/*` -> merge into `develop`
 
 ## 🎉 That's it!
 
