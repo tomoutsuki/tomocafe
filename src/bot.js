@@ -70,6 +70,7 @@ client.on('messageCreate', async (message) => {
     if (!commandBody) return;
 
     const [command, ...args] = commandBody.split(/\s+/u);
+    const commandArgText = commandBody.slice(command.length).trim();
 
     switch (command.toUpperCase()) {
         case 'MENU':
@@ -120,7 +121,7 @@ client.on('messageCreate', async (message) => {
             return;
 
         case 'メモ追加':
-            await Memo.addMemo(message, args.join(' '));
+            await Memo.addMemo(message, commandArgText);
             return;
 
         case 'メモ':

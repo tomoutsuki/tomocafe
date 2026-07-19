@@ -2,13 +2,27 @@ const { EmbedBuilder } = require('discord.js');
 const Memo = require('../models/Memo');
 
 const NUMBER_EMOJIS = ['1⃣', '2⃣', '3⃣', '4⃣', '5⃣', '6⃣', '7⃣', '8⃣', '9⃣'];
+const PREVIOUS_PAGE_EMOJI = '👈';
+const NEXT_PAGE_EMOJI = '👉';
 const CLOSE_EMOJI = '❌';
 const MAX_VISIBLE_MEMOS = NUMBER_EMOJIS.length;
 const COLLECTOR_TIMEOUT_MS = 5 * 60 * 1000;
+const MEMO_SPLIT_PATTERN = /[\s\u3000、，,]+/u;
 
 function normalizeMemoTitle(rawTitle) {
     if (typeof rawTitle !== 'string') return '';
     return rawTitle.replace(/\s+/gu, ' ').trim();
+}
+
+function splitMemoTitles(rawInput) {
+    if (typeof rawInput !== 'string') {
+        return [];
+    }
+
+    return rawInput
+        .split(MEMO_SPLIT_PATTERN)
+        .map((title) => normalizeMemoTitle(title))
+        .filter(Boolean);
 }
 
 function getDisplayName(message) {
@@ -28,26 +42,26 @@ function getAvatarUrl(message) {
     );
 }
 
-function buildMemoDescription(memos, totalCount) {
+function buildMemoDescription(memos, pageIndex, totalPages) {
     const lines = memos.map((memo, index) => {
         const prefix = memo.checked ? '✅' : NUMBER_EMOJIS[index];
         return `${prefix}　${memo.title}`;
     });
 
-    if (totalCount > MAX_VISIBLE_MEMOS) {
+    if (totalPages > 1) {
         lines.push('');
-        lines.push(`ほか${totalCount - MAX_VISIBLE_MEMOS}件あります。今は先頭${MAX_VISIBLE_MEMOS}件まで操作できます☕`);
+        lines.push(`👈 👉 でページ移動できます (${pageIndex + 1}/${totalPages})`);
     }
 
     return lines.join('\n');
 }
 
-function buildMemoEmbed(message, memos, totalCount, mode) {
+function buildMemoEmbed(message, memos, mode, pageIndex, totalPages) {
     const embed = new EmbedBuilder()
         .setTitle(`${getDisplayName(message)}のメモ`)
-        .setDescription(buildMemoDescription(memos, totalCount))
+        .setDescription(buildMemoDescription(memos, pageIndex, totalPages))
         .setColor(mode === 'delete' ? 0xd97706 : 0x8b6f47)
-        .setFooter({ text: '反応で操作できます。5分で受付終了します。' })
+        .setFooter({ text: '❌閉じる' })
         .setTimestamp();
 
     const avatarURL = getAvatarUrl(message);
@@ -62,32 +76,139 @@ function buildMemoEmbed(message, memos, totalCount, mode) {
     return embed;
 }
 
-async function addMemoReactions(targetMessage, visibleCount) {
-    for (let index = 0; index < visibleCount; index += 1) {
-        await targetMessage.react(NUMBER_EMOJIS[index]);
+function buildExpiredEmbed(targetMessage) {
+    const currentEmbed = targetMessage.embeds?.[0];
+    if (!currentEmbed) {
+        return new EmbedBuilder().setFooter({ text: 'このメモの操作受付は終了しました。' });
     }
 
-    await targetMessage.react(CLOSE_EMOJI);
+    return EmbedBuilder.from(currentEmbed).setFooter({
+        text: 'このメモの操作受付は終了しました。'
+    });
+}
+
+function buildEmojiMap(memos) {
+    return new Map(
+        memos.map((memo, index) => [NUMBER_EMOJIS[index], memo._id.toString()])
+    );
+}
+
+function buildSuppressionKey(emojiName, userId) {
+    return `${emojiName}:${userId}`;
+}
+
+async function fetchOwnerMemos(ownerId) {
+    return Memo.find({ owner_id: ownerId }).sort({ createdAt: 1, _id: 1 });
+}
+
+function getPageCount(totalMemos) {
+    return Math.max(1, Math.ceil(totalMemos / MAX_VISIBLE_MEMOS));
+}
+
+function getVisibleMemos(memos, pageIndex) {
+    const start = pageIndex * MAX_VISIBLE_MEMOS;
+    return memos.slice(start, start + MAX_VISIBLE_MEMOS);
+}
+
+async function ensureReaction(targetMessage, emojiName) {
+    if (!targetMessage.reactions.cache.has(emojiName)) {
+        await targetMessage.react(emojiName);
+    }
+}
+
+async function removeReaction(targetMessage, emojiName) {
+    const reaction = targetMessage.reactions.cache.get(emojiName);
+    if (reaction) {
+        await reaction.remove().catch(() => null);
+    }
+}
+
+async function syncMemoReactions(targetMessage, previousVisibleCount, nextVisibleCount, hasPagination) {
+    if (nextVisibleCount > previousVisibleCount) {
+        for (let index = previousVisibleCount; index < nextVisibleCount; index += 1) {
+            await ensureReaction(targetMessage, NUMBER_EMOJIS[index]);
+        }
+    }
+
+    if (nextVisibleCount < previousVisibleCount) {
+        for (let index = previousVisibleCount - 1; index >= nextVisibleCount; index -= 1) {
+            await removeReaction(targetMessage, NUMBER_EMOJIS[index]);
+        }
+    }
+
+    if (hasPagination) {
+        await ensureReaction(targetMessage, PREVIOUS_PAGE_EMOJI);
+        await ensureReaction(targetMessage, NEXT_PAGE_EMOJI);
+    } else {
+        await removeReaction(targetMessage, PREVIOUS_PAGE_EMOJI);
+        await removeReaction(targetMessage, NEXT_PAGE_EMOJI);
+    }
+
+    await ensureReaction(targetMessage, CLOSE_EMOJI);
+}
+
+async function clearUserInputReactions(targetMessage, userId, suppressedRemovals) {
+    const inputEmojis = [...NUMBER_EMOJIS, PREVIOUS_PAGE_EMOJI, NEXT_PAGE_EMOJI];
+
+    for (const emojiName of inputEmojis) {
+        const reaction = targetMessage.reactions.cache.get(emojiName);
+        if (!reaction) {
+            continue;
+        }
+
+        suppressedRemovals.add(buildSuppressionKey(emojiName, userId));
+        await reaction.users.remove(userId).catch(() => {
+            suppressedRemovals.delete(buildSuppressionKey(emojiName, userId));
+        });
+    }
 }
 
 async function closeMemoMessage(targetMessage) {
     await targetMessage.delete().catch(() => null);
 }
 
-async function finishCollectorMessage(targetMessage, message, mode, reason) {
+async function finishCollectorMessage(targetMessage, reason) {
     if (reason !== 'time') return;
 
-    const currentEmbed = targetMessage.embeds?.[0];
-    const finalEmbed = currentEmbed
-        ? EmbedBuilder.from(currentEmbed).setFooter({ text: 'このメモの操作受付は終了しました。' })
-        : buildMemoEmbed(message, [], 0, mode).setFooter({ text: 'このメモの操作受付は終了しました。' });
-
-    await targetMessage.edit({ embeds: [finalEmbed] }).catch(() => null);
+    await targetMessage.edit({ embeds: [buildExpiredEmbed(targetMessage)] }).catch(() => null);
     await targetMessage.reactions.removeAll().catch(() => null);
 }
 
-async function fetchOwnerMemos(ownerId) {
-    return Memo.find({ owner_id: ownerId }).sort({ createdAt: 1, _id: 1 });
+async function renderMemoState(memoMessage, message, mode, pageIndex, previousVisibleCount) {
+    const refreshedMemos = await fetchOwnerMemos(message.author.id);
+    if (refreshedMemos.length === 0) {
+        return {
+            shouldClose: true,
+            emojiToMemoId: new Map(),
+            visibleCount: 0,
+            pageIndex: 0,
+            totalPages: 0
+        };
+    }
+
+    const totalPages = getPageCount(refreshedMemos.length);
+    const safePageIndex = Math.min(pageIndex, totalPages - 1);
+    const visibleMemos = getVisibleMemos(refreshedMemos, safePageIndex);
+    const nextVisibleCount = visibleMemos.length;
+
+    await memoMessage.edit({
+        embeds: [buildMemoEmbed(message, visibleMemos, mode, safePageIndex, totalPages)]
+    });
+
+    await syncMemoReactions(
+        memoMessage,
+        previousVisibleCount,
+        nextVisibleCount,
+        totalPages > 1
+    );
+
+    return {
+        shouldClose: false,
+        emojiToMemoId: buildEmojiMap(visibleMemos),
+        visibleCount: nextVisibleCount,
+        pageIndex: safePageIndex,
+        totalPages
+    };
 }
 
 async function showMemoBoard(message, mode = 'view') {
@@ -101,16 +222,18 @@ async function showMemoBoard(message, mode = 'view') {
             return;
         }
 
-        const visibleMemos = memos.slice(0, MAX_VISIBLE_MEMOS);
+        let pageIndex = 0;
+        let totalPages = getPageCount(memos.length);
+        let visibleMemos = getVisibleMemos(memos, pageIndex);
+        let visibleCount = visibleMemos.length;
+        let emojiToMemoId = buildEmojiMap(visibleMemos);
+        const suppressedRemovals = new Set();
+
         const memoMessage = await message.reply({
-            embeds: [buildMemoEmbed(message, visibleMemos, memos.length, mode)]
+            embeds: [buildMemoEmbed(message, visibleMemos, mode, pageIndex, totalPages)]
         });
 
-        await addMemoReactions(memoMessage, visibleMemos.length);
-
-        const emojiToMemoId = new Map(
-            visibleMemos.map((memo, index) => [NUMBER_EMOJIS[index], memo._id.toString()])
-        );
+        await syncMemoReactions(memoMessage, 0, visibleCount, totalPages > 1);
 
         const collector = memoMessage.createReactionCollector({
             filter: (reaction, user) => {
@@ -118,17 +241,47 @@ async function showMemoBoard(message, mode = 'view') {
                     return false;
                 }
 
-                return reaction.emoji.name === CLOSE_EMOJI || emojiToMemoId.has(reaction.emoji.name);
+                return (
+                    reaction.emoji.name === CLOSE_EMOJI ||
+                    reaction.emoji.name === PREVIOUS_PAGE_EMOJI ||
+                    reaction.emoji.name === NEXT_PAGE_EMOJI ||
+                    emojiToMemoId.has(reaction.emoji.name)
+                );
             },
-            time: COLLECTOR_TIMEOUT_MS
+            time: COLLECTOR_TIMEOUT_MS,
+            dispose: true
         });
 
-        collector.on('collect', async (reaction) => {
+        collector.on('collect', async (reaction, user) => {
             const emoji = reaction.emoji.name;
 
             if (emoji === CLOSE_EMOJI) {
                 collector.stop('closed');
                 await closeMemoMessage(memoMessage);
+                return;
+            }
+
+            if (emoji === PREVIOUS_PAGE_EMOJI || emoji === NEXT_PAGE_EMOJI) {
+                const nextPageIndex = emoji === PREVIOUS_PAGE_EMOJI
+                    ? Math.max(0, pageIndex - 1)
+                    : Math.min(totalPages - 1, pageIndex + 1);
+
+                const rendered = await renderMemoState(
+                    memoMessage,
+                    message,
+                    mode,
+                    nextPageIndex,
+                    visibleCount
+                );
+
+                if (!rendered.shouldClose) {
+                    pageIndex = rendered.pageIndex;
+                    totalPages = rendered.totalPages;
+                    visibleCount = rendered.visibleCount;
+                    emojiToMemoId = rendered.emojiToMemoId;
+                }
+
+                await clearUserInputReactions(memoMessage, user.id, suppressedRemovals);
                 return;
             }
 
@@ -138,33 +291,77 @@ async function showMemoBoard(message, mode = 'view') {
             }
 
             if (mode === 'delete') {
+                suppressedRemovals.add(buildSuppressionKey(emoji, user.id));
                 await Memo.findOneAndDelete({ _id: memoId, owner_id: message.author.id });
+                await reaction.users.remove(user.id).catch(() => {
+                    suppressedRemovals.delete(buildSuppressionKey(emoji, user.id));
+                });
             } else {
-                const memo = await Memo.findOne({ _id: memoId, owner_id: message.author.id });
-                if (!memo) {
-                    return;
-                }
-
-                memo.checked = !memo.checked;
-                await memo.save();
+                await Memo.updateOne(
+                    { _id: memoId, owner_id: message.author.id },
+                    { $set: { checked: true } }
+                );
             }
 
-            const refreshedMemos = await fetchOwnerMemos(message.author.id);
-            if (refreshedMemos.length === 0) {
+            const rendered = await renderMemoState(
+                memoMessage,
+                message,
+                mode,
+                pageIndex,
+                visibleCount
+            );
+
+            if (rendered.shouldClose) {
                 collector.stop('empty');
                 await closeMemoMessage(memoMessage);
                 return;
             }
 
-            emojiToMemoId.clear();
-            const nextVisibleMemos = refreshedMemos.slice(0, MAX_VISIBLE_MEMOS);
-            nextVisibleMemos.forEach((memo, index) => {
-                emojiToMemoId.set(NUMBER_EMOJIS[index], memo._id.toString());
-            });
+            pageIndex = rendered.pageIndex;
+            totalPages = rendered.totalPages;
+            visibleCount = rendered.visibleCount;
+            emojiToMemoId = rendered.emojiToMemoId;
+        });
 
-            await memoMessage.edit({
-                embeds: [buildMemoEmbed(message, nextVisibleMemos, refreshedMemos.length, mode)]
-            });
+        collector.on('remove', async (reaction, user) => {
+            const suppressedKey = buildSuppressionKey(reaction.emoji.name, user.id);
+            if (suppressedRemovals.delete(suppressedKey)) {
+                return;
+            }
+
+            if (mode === 'delete') {
+                return;
+            }
+
+            const emoji = reaction.emoji.name;
+            const memoId = emojiToMemoId.get(emoji);
+            if (!memoId || user.bot || user.id !== message.author.id) {
+                return;
+            }
+
+            await Memo.updateOne(
+                { _id: memoId, owner_id: message.author.id },
+                { $set: { checked: false } }
+            );
+
+            const rendered = await renderMemoState(
+                memoMessage,
+                message,
+                mode,
+                pageIndex,
+                visibleCount
+            );
+
+            if (rendered.shouldClose) {
+                collector.stop('empty');
+                await closeMemoMessage(memoMessage);
+                return;
+            }
+
+            pageIndex = rendered.pageIndex;
+            totalPages = rendered.totalPages;
+            visibleCount = rendered.visibleCount;
+            emojiToMemoId = rendered.emojiToMemoId;
         });
 
         collector.on('end', async (_, reason) => {
@@ -172,7 +369,7 @@ async function showMemoBoard(message, mode = 'view') {
                 return;
             }
 
-            await finishCollectorMessage(memoMessage, message, mode, reason);
+            await finishCollectorMessage(memoMessage, reason);
         });
     } catch (error) {
         console.error('メモ表示エラー:', error);
@@ -182,26 +379,33 @@ async function showMemoBoard(message, mode = 'view') {
     }
 }
 
-async function addMemo(message, rawTitle) {
+async function addMemo(message, rawInput) {
     try {
-        const title = normalizeMemoTitle(rawTitle);
+        const titles = splitMemoTitles(rawInput);
 
-        if (!title) {
+        if (titles.length === 0) {
             await message.reply({
                 content: '追加したいメモの内容を書いてください☕ 例：！メモ追加　課題を終わらせる'
             });
             return;
         }
 
-        const memo = new Memo({
-            owner_id: message.author.id,
-            title
-        });
+        await Memo.insertMany(
+            titles.map((title) => ({
+                owner_id: message.author.id,
+                title
+            }))
+        );
 
-        await memo.save();
+        if (titles.length === 1) {
+            await message.reply({
+                content: `メモを追加しました☕ 「${titles[0]}」`
+            });
+            return;
+        }
 
         await message.reply({
-            content: `メモを追加しました☕ 「${title}」`
+            content: `メモを${titles.length}件追加しました☕`
         });
     } catch (error) {
         console.error('メモ追加エラー:', error);
