@@ -1,6 +1,6 @@
 {
   "name": "tomocafe",
-  "version": "1.0.0",
+  "version": "beta-1.1.0",
   "description": "A BOT for the Discord server \"Tomo Cafe\"",
   "main": "src/bot.js",
   "scripts": {
