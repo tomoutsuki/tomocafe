@@ -27,6 +27,8 @@ module.exports = async (message) => {
     const { battle, created, cooldownRemainingMs } = await createSoloBattle({
         player: user,
         playerId: message.author.id,
+        playerDisplayName: message.member?.displayName || message.author.displayName || message.author.username,
+        playerAvatarUrl: message.author.displayAvatarURL({ extension: 'png', size: 128 }),
         monster,
         guildId: message.guildId,
         channelId: message.channelId
@@ -39,8 +41,11 @@ module.exports = async (message) => {
             });
             return;
         }
+        const itemOptions = await getBattleItemOptions(battle);
+        const payload = createBattlePayload(battle, new Date(), itemOptions);
         await message.reply({
-            content: `すでに進行中の戦闘があります。\n${createBattlePayload(battle).content}`
+            content: 'すでに進行中の戦闘があります。',
+            embeds: payload.embeds
         });
         return;
     }

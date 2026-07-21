@@ -20,7 +20,9 @@ const { parseBattleCustomId } = require('../src/services/battleCustomId');
 const {
     createBattlePayload,
     createItemMenuPayload,
-    createSpecialReactionPayload
+    createSpecialReactionPayload,
+    createHpBar,
+    recentLogLines
 } = require('../src/services/battleView');
 
 test('monster seed has 14 normal monsters, 6 bosses, and reusable mechanic counts', () => {
@@ -51,6 +53,7 @@ test('battle draft snapshots player and monster stats for restart-safe storage',
     assert.equal(draft.monster_hp, monster.battle.max_hp);
     assert.equal(draft.reward_beans, monster.battle.reward_beans);
     assert.ok(draft.monster_tags.includes('コーヒー'));
+    assert.equal(draft.monster_image_url, 'https://i.imgur.com/3kNNOnu.png');
     assert.ok(draft.expires_at > now);
 });
 
@@ -111,6 +114,7 @@ test('phase 2 active battle renders exactly attack, item, and inspect buttons', 
         battle_id: '123e4567-e89b-12d3-a456-426614174000',
         status: 'active',
         monster_name: 'エスプレッソ・スライム',
+        monster_image_url: 'https://i.imgur.com/3kNNOnu.png',
         monster_hp: 28,
         monster_max_hp: 28,
         player_hp: 30,
@@ -122,13 +126,17 @@ test('phase 2 active battle renders exactly attack, item, and inspect buttons', 
     }, new Date('2026-07-21T12:00:00.000Z'), { hasUsableItems: true });
 
     const buttons = payload.components[0].toJSON().components;
-    assert.match(payload.content, /こうげき/);
+    const embed = payload.embeds[0].toJSON();
+    assert.match(embed.description, /^\*\*/);
+    assert.equal(embed.thumbnail.url, 'https://i.imgur.com/3kNNOnu.png');
     assert.deepEqual(buttons.map((button) => button.custom_id), [
         'battle:attack:123e4567-e89b-12d3-a456-426614174000',
         'battle:item:123e4567-e89b-12d3-a456-426614174000',
         'battle:inspect:123e4567-e89b-12d3-a456-426614174000'
     ]);
     assert.ok(buttons.every((button) => button.disabled === false));
+    assert.ok(buttons.every((button) => button.style === 2)); // ButtonStyle.Secondary
+    assert.deepEqual(buttons.map((button) => button.emoji.name), ['⚔️', '🎒', '🔍']);
 });
 
 test('phase 2 selects useful items and resolves their one-tap effects', () => {
@@ -283,6 +291,38 @@ test('special reaction view only exposes the matching two or three choices', () 
         parseBattleCustomId('battle:special_exploit:123e4567-e89b-12d3-a456-426614174000'),
         { action: 'special_exploit', battleId: '123e4567-e89b-12d3-a456-426614174000' }
     );
+});
+
+test('battle embed keeps the current log prominent and limits past logs to two lines', () => {
+    const payload = createBattlePayload({
+        battle_id: '123e4567-e89b-12d3-a456-426614174000',
+        status: 'active',
+        player_display_name: 'テスト店員',
+        player_avatar_url: 'https://example.com/avatar.png',
+        monster_name: 'エスプレッソ・スライム',
+        monster_image_url: 'https://example.com/slime.png',
+        monster_hp: 19,
+        monster_max_hp: 28,
+        player_hp: 24,
+        player_max_hp: 30,
+        reward_beans: 3,
+        expires_at: '2026-07-21T12:30:00.000Z',
+        last_action_message: '今回のこうげき！ 9ダメージ！',
+        recent_logs: [
+            { message: '最初の行動' },
+            { message: '二つ前の行動' },
+            { message: '一つ前の行動' },
+            { message: '今回のこうげき！ 9ダメージ！' }
+        ]
+    });
+    const embed = payload.embeds[0].toJSON();
+    assert.equal(createHpBar(24, 30), '▰▰▰▰▰▰▰▰▱▱');
+    assert.match(embed.description, /^\*\*今回のこうげき！ 9ダメージ！\*\*$/);
+    const recentField = embed.fields.find((field) => field.name === '最近のログ');
+    assert.equal(recentField.value.split('\n').length, 2);
+    assert.match(recentField.value, /二つ前の行動/);
+    assert.match(recentField.value, /一つ前の行動/);
+    assert.equal(recentLogLines({ recent_logs: [], last_action_message: 'x' }).length, 0);
 });
 
 test('expired battles are recognized without relying on bot process memory', () => {

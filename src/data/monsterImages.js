@@ -1,0 +1,22 @@
+module.exports = {
+    bell_gremlin: 'https://i.imgur.com/dnbd8Ui.png',
+    bitter_beans: 'https://i.imgur.com/7i9uPq0.png',
+    butter_imp: 'https://i.imgur.com/Tgf80Qs.png',
+    caffeine_bat: 'https://i.imgur.com/AlVp5xp.png',
+    cappuchipaka: 'https://i.imgur.com/BdvzoFo.png',
+    cheese_cake_moon: 'https://i.imgur.com/6XBb0lO.png',
+    croissant_club: 'https://i.imgur.com/0U3FBM8.png',
+    drip_wizard: 'https://i.imgur.com/Dr5tKCn.png',
+    expresso_slime: 'https://i.imgur.com/3kNNOnu.png',
+    pudding_knight: 'https://i.imgur.com/FgehQil.png',
+    register_monster: 'https://i.imgur.com/bJJKBIO.png',
+    spoon_geist: 'https://i.imgur.com/TMadhRC.png',
+    tea_bag_ghost: 'https://i.imgur.com/9nTRRBn.png',
+    toast_mimic: 'https://i.imgur.com/j4RIyqP.png',
+    pirate_captain_mocca: 'https://i.imgur.com/iZPMkzg.png',
+    great_earl_schokolade: 'https://i.imgur.com/I4sHthU.png',
+    cleaning_master_sauber: 'https://i.imgur.com/3DZY8Rn.png',
+    ice_emperor_frapperion: 'https://i.imgur.com/a7os0Nr.png',
+    midnight_owner_dunkel: 'https://i.imgur.com/cNsLtxL.png',
+    queen_pafferia: 'https://i.imgur.com/1wt65ed.png'
+};

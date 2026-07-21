@@ -18,6 +18,8 @@ const BattleSchema = new mongoose.Schema({
     battle_id: { type: String, required: true, unique: true, index: true },
     // Discord snowflakes must remain strings; JavaScript Number loses precision.
     player_id: { type: String, required: true },
+    player_display_name: { type: String, default: 'カフェのお客さま' },
+    player_avatar_url: { type: String, default: null },
     guild_id: { type: String, default: null },
     channel_id: { type: String, default: null },
     message_id: { type: String, default: null },
@@ -29,6 +31,7 @@ const BattleSchema = new mongoose.Schema({
     },
     monster_id: { type: String, required: true },
     monster_name: { type: String, required: true },
+    monster_image_url: { type: String, default: null },
     monster_description: { type: String, default: '' },
     monster_inspect_text: { type: String, default: '' },
     monster_tags: { type: [String], default: [] },
@@ -52,6 +55,10 @@ const BattleSchema = new mongoose.Schema({
     special_reaction: { type: SpecialReactionSchema, default: () => ({ active: false }) },
     used_mechanic_indices: { type: [Number], default: [] },
     last_action_message: { type: String, default: null },
+    recent_logs: [{
+        message: { type: String, required: true },
+        created_at: { type: Date, required: true }
+    }],
     expires_at: { type: Date, required: true, index: true },
     finished_at: { type: Date, default: null },
     action_lock: { type: Boolean, default: false },

@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const Battle = require('../models/Battle');
 const User = require('../models/User');
 const ItemMaster = require('../models/ItemMaster');
+const monsterImages = require('../data/monsterImages');
 
 const DEFAULT_TIMEOUT_MINUTES = 30;
 const LOCK_STALE_AFTER_MS = 15 * 1000;
@@ -42,17 +43,20 @@ function getPlayerStats(user) {
     };
 }
 
-function createBattleDraft({ player, playerId, monster, guildId, channelId, now = new Date() }) {
+function createBattleDraft({ player, playerId, playerDisplayName, playerAvatarUrl, monster, guildId, channelId, now = new Date() }) {
     const playerStats = getPlayerStats(player);
     const maxHp = monster.battle.max_hp;
 
     return {
         battle_id: crypto.randomUUID(),
         player_id: String(playerId || player.user_id),
+        player_display_name: playerDisplayName || 'カフェのお客さま',
+        player_avatar_url: playerAvatarUrl || null,
         guild_id: guildId || null,
         channel_id: channelId || null,
         monster_id: monster.monster_id,
         monster_name: monster.name_ja,
+        monster_image_url: monsterImages[monster.monster_id] || null,
         monster_description: monster.appearance || monster.behavior || '',
         monster_inspect_text: monster.inspect_text || '',
         monster_tags: [...new Set([...(monster.tags || []), monster.category].filter(Boolean))],
@@ -190,7 +194,8 @@ function prepareSpecialReaction(battle, changes, random = Math.random) {
             message: mechanic.message,
             mechanic_index: mechanicIndex
         },
-        last_action_message: `${changes.last_action_message}\n⚠️ ${mechanic.message}`
+        last_action_message: `⚠️ ${mechanic.message}`,
+        log_entries: [changes.last_action_message, `⚠️ ${mechanic.message}`]
     };
 }
 
@@ -389,7 +394,7 @@ function buildInspectionMessage(battle) {
     ].join('\n');
 }
 
-async function createSoloBattle({ player, playerId, monster, guildId, channelId, now = new Date() }) {
+async function createSoloBattle({ player, playerId, playerDisplayName, playerAvatarUrl, monster, guildId, channelId, now = new Date() }) {
     const activeBattle = await findActiveBattleForPlayer(playerId || player.user_id, now);
     if (activeBattle) {
         return { battle: activeBattle, created: false };
@@ -405,6 +410,8 @@ async function createSoloBattle({ player, playerId, monster, guildId, channelId,
         battle = await Battle.create(createBattleDraft({
             player,
             playerId,
+            playerDisplayName,
+            playerAvatarUrl,
             monster,
             guildId,
             channelId,
@@ -497,15 +504,23 @@ async function cancelBattle(battleId, now = new Date()) {
 }
 
 async function finishBattle(battle, changes) {
+    const { log_entries: logEntries, ...stateChanges } = changes;
+    const entries = (logEntries || [changes.last_action_message])
+        .filter(Boolean)
+        .map((message) => ({ message, created_at: new Date() }));
+    const update = {
+        $set: {
+            ...stateChanges,
+            action_lock: false,
+            action_locked_at: null
+        }
+    };
+    if (entries.length > 0) {
+        update.$push = { recent_logs: { $each: entries, $slice: -12 } };
+    }
     return Battle.findOneAndUpdate(
         { _id: battle._id, action_lock: true },
-        {
-            $set: {
-                ...changes,
-                action_lock: false,
-                action_locked_at: null
-            }
-        },
+        update,
         { new: true }
     );
 }
@@ -547,7 +562,7 @@ async function inspectBattle(battleId, now = new Date()) {
         inspected: true,
         next_attack_bonus: 3,
         inspection_message: inspectionMessage,
-        last_action_message: '相手の様子をしっかり観察した。'
+        last_action_message: inspectionMessage
     });
     return { changed: true, battle };
 }
@@ -638,7 +653,13 @@ async function grantBattleReward(battle, now = new Date()) {
         {
             $set: {
                 reward_claimed: true,
-                last_action_message: `${battle.last_action_message}\n報酬として ${battle.reward_beans}豆を受け取った！`
+                last_action_message: `勝利！ 報酬として ${battle.reward_beans}豆を受け取った！`
+            },
+            $push: {
+                recent_logs: {
+                    $each: [{ message: `勝利！ 報酬として ${battle.reward_beans}豆を受け取った！`, created_at: now }],
+                    $slice: -12
+                }
             }
         },
         { new: true }
