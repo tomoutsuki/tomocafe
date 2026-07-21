@@ -11,10 +11,17 @@ const {
     chooseHealingItem,
     chooseRecommendedItem,
     resolveItemAction,
-    buildInspectionMessage
+    buildInspectionMessage,
+    prepareSpecialReaction,
+    resolveSpecialReaction,
+    isSpecialReactionActive
 } = require('../src/services/battleService');
 const { parseBattleCustomId } = require('../src/services/battleCustomId');
-const { createBattlePayload, createItemMenuPayload } = require('../src/services/battleView');
+const {
+    createBattlePayload,
+    createItemMenuPayload,
+    createSpecialReactionPayload
+} = require('../src/services/battleView');
 
 test('monster seed has 14 normal monsters, 6 bosses, and reusable mechanic counts', () => {
     const normal = monsters.monsters.filter((monster) => !monster.is_boss);
@@ -178,6 +185,104 @@ test('inspect is limited to one use and makes the next attack stronger', () => {
     const result = resolveAttack(battle, new Date('2026-07-21T12:00:00.000Z'));
     assert.equal(result.monster_hp, 16); // (10 + 3) - 1
     assert.equal(result.next_attack_bonus, 0);
+});
+
+test('special reactions use shared patterns and do not trigger every turn', () => {
+    const battle = {
+        status: 'active',
+        monster_name: 'エスプレッソ・スライム',
+        monster_hp: 19,
+        monster_max_hp: 28,
+        monster_attack: 5,
+        monster_defense: 1,
+        player_hp: 27,
+        player_max_hp: 30,
+        player_attack: 10,
+        player_defense: 2,
+        next_attack_bonus: 0,
+        monster_is_boss: false,
+        monster_difficulty: 1,
+        special_reaction: { active: false },
+        used_mechanic_indices: [],
+        monster_mechanics: [{
+            pattern: 'weakness_exposure',
+            trigger: 'turn_2_once',
+            message: 'スライムがカップから大きく飛び出した！',
+            hint: '今なら弱点を狙えそうだ。'
+        }]
+    };
+    const prepared = prepareSpecialReaction(battle, {
+        status: 'active',
+        turn: 2,
+        monster_hp: 19,
+        player_hp: 27,
+        last_action_message: '通常攻撃をした。'
+    }, () => 0.1);
+    assert.equal(isSpecialReactionActive({ ...battle, ...prepared }), true);
+    assert.equal(prepared.special_reaction.pattern, 'weakness_exposure');
+    assert.deepEqual(prepared.used_mechanic_indices, [0]);
+
+    const resolved = resolveSpecialReaction({ ...battle, ...prepared }, 'exploit', new Date('2026-07-21T12:00:00.000Z'));
+    assert.equal(resolved.monster_hp, 5); // (10 + 5) - 1
+    assert.equal(resolved.player_hp, 24); // risk: normal counterattack
+    assert.equal(resolved.special_reaction.active, false);
+
+    const noRepeat = prepareSpecialReaction({ ...battle, ...prepared }, {
+        status: 'active',
+        turn: 3,
+        monster_hp: 5,
+        player_hp: 24,
+        last_action_message: '次の攻撃をした。'
+    }, () => 0.1);
+    assert.equal(noRepeat.special_reaction, undefined);
+});
+
+test('heavy warning and interrupt choices retain risks and benefits', () => {
+    const heavy = {
+        status: 'active',
+        monster_name: 'ドリップ・ウィザード',
+        monster_hp: 38,
+        monster_attack: 8,
+        monster_defense: 2,
+        player_hp: 30,
+        player_attack: 10,
+        player_defense: 2,
+        next_attack_bonus: 0,
+        special_reaction: { active: true, pattern: 'heavy_attack_warning' }
+    };
+    assert.equal(resolveSpecialReaction(heavy, 'dodge').player_hp, 30);
+    assert.equal(resolveSpecialReaction(heavy, 'guard').player_hp, 23); // 14 damage / 2
+    assert.equal(resolveSpecialReaction(heavy, 'press').monster_hp, 30);
+
+    const interrupted = resolveSpecialReaction({
+        ...heavy,
+        special_reaction: { active: true, pattern: 'interruptible' }
+    }, 'interrupt');
+    assert.equal(interrupted.next_attack_bonus, 3);
+});
+
+test('special reaction view only exposes the matching two or three choices', () => {
+    const payload = createSpecialReactionPayload({
+        battle_id: '123e4567-e89b-12d3-a456-426614174000',
+        status: 'active',
+        monster_name: 'エスプレッソ・スライム',
+        monster_hp: 19,
+        monster_max_hp: 28,
+        player_hp: 27,
+        player_max_hp: 30,
+        special_reaction: {
+            active: true,
+            pattern: 'heavy_attack_warning',
+            message: '強い一撃を準備している！'
+        }
+    });
+    assert.deepEqual(payload.components[0].toJSON().components.map((button) => button.label), [
+        'よける', 'ガード', '攻め続ける'
+    ]);
+    assert.deepEqual(
+        parseBattleCustomId('battle:special_exploit:123e4567-e89b-12d3-a456-426614174000'),
+        { action: 'special_exploit', battleId: '123e4567-e89b-12d3-a456-426614174000' }
+    );
 });
 
 test('expired battles are recognized without relying on bot process memory', () => {

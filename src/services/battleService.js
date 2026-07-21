@@ -19,6 +19,13 @@ const BUILTIN_BATTLE_ITEM_LABELS = {
     sugar_cube: '角砂糖',
     sticky_syrup: 'とろとろシロップ'
 };
+const SPECIAL_PATTERN_MAP = {
+    heavy_attack_warning: 'heavy_attack_warning',
+    weakness_exposure: 'weakness_exposure',
+    interruptible: 'interruptible',
+    summon: 'interruptible',
+    item_weakness: 'weakness_exposure'
+};
 
 function getBattleTimeoutMs() {
     const minutes = Number(process.env.BATTLE_TIMEOUT_MINUTES || DEFAULT_TIMEOUT_MINUTES);
@@ -50,6 +57,14 @@ function createBattleDraft({ player, playerId, monster, guildId, channelId, now 
         monster_inspect_text: monster.inspect_text || '',
         monster_tags: [...new Set([...(monster.tags || []), monster.category].filter(Boolean))],
         monster_mechanic_hints: (monster.mechanics || []).map((mechanic) => mechanic.hint).filter(Boolean),
+        monster_mechanics: (monster.mechanics || []).map((mechanic) => ({
+            pattern: mechanic.pattern,
+            trigger: mechanic.trigger,
+            message: mechanic.message,
+            hint: mechanic.hint
+        })),
+        monster_is_boss: Boolean(monster.is_boss),
+        monster_difficulty: monster.difficulty || 1,
         monster_max_hp: maxHp,
         monster_hp: maxHp,
         monster_attack: monster.battle.attack,
@@ -134,6 +149,129 @@ function resolveAttack(battle, now = new Date()) {
         last_action_message: lost
             ? `あなたのこうげき！ ${battle.monster_name} に ${playerDamage} ダメージ！${insightBonus ? ' 調査のひらめきが効いた！' : ''}\n${battle.monster_name} の反撃！ ${monsterDamage} ダメージを受け、力尽きた…。`
             : `あなたのこうげき！ ${battle.monster_name} に ${playerDamage} ダメージ！${insightBonus ? ' 調査のひらめきが効いた！' : ''}\n${battle.monster_name} の反撃！ ${monsterDamage} ダメージを受けた。`
+    };
+}
+
+function normalizedSpecialPattern(pattern) {
+    return SPECIAL_PATTERN_MAP[pattern] || null;
+}
+
+function triggerTurn(trigger) {
+    const match = /^turn_(\d+)/.exec(trigger || '');
+    return match ? Number(match[1]) : null;
+}
+
+function shouldTriggerSpecialReaction(battle, mechanic, random = Math.random) {
+    if (battle.monster_is_boss || battle.monster_difficulty >= 2) return true;
+    // 基本敵は低確率で1回だけ。毎戦の定型化を避ける。
+    return random() < 0.35;
+}
+
+function prepareSpecialReaction(battle, changes, random = Math.random) {
+    if (changes.status !== 'active' || battle.special_reaction?.active) return changes;
+
+    const used = new Set(battle.used_mechanic_indices || []);
+    const mechanicIndex = (battle.monster_mechanics || []).findIndex((mechanic, index) => (
+        !used.has(index)
+        && triggerTurn(mechanic.trigger) === changes.turn
+        && normalizedSpecialPattern(mechanic.pattern)
+    ));
+    if (mechanicIndex < 0) return changes;
+
+    const mechanic = battle.monster_mechanics[mechanicIndex];
+    if (!shouldTriggerSpecialReaction(battle, mechanic, random)) return changes;
+
+    return {
+        ...changes,
+        used_mechanic_indices: [...used, mechanicIndex],
+        special_reaction: {
+            active: true,
+            pattern: normalizedSpecialPattern(mechanic.pattern),
+            message: mechanic.message,
+            mechanic_index: mechanicIndex
+        },
+        last_action_message: `${changes.last_action_message}\n⚠️ ${mechanic.message}`
+    };
+}
+
+function isSpecialReactionActive(battle) {
+    return Boolean(battle?.status === 'active' && battle.special_reaction?.active);
+}
+
+function resolveSpecialReaction(battle, choice, now = new Date()) {
+    const pattern = battle.special_reaction?.pattern;
+    const specialDamage = calculateDamage(battle.monster_attack * 2, battle.player_defense);
+    const normalDamage = calculateDamage(battle.monster_attack, battle.player_defense);
+    const insightBonus = Math.max(0, Number(battle.next_attack_bonus) || 0);
+    const normalPlayerDamage = calculateDamage(battle.player_attack + insightBonus, battle.monster_defense);
+    const weakPointDamage = calculateDamage(battle.player_attack + insightBonus + 5, battle.monster_defense);
+    let monsterHp = battle.monster_hp;
+    let playerHp = battle.player_hp;
+    let nextAttackBonus = battle.next_attack_bonus || 0;
+    let message;
+
+    if (pattern === 'heavy_attack_warning') {
+        if (choice === 'dodge') {
+            message = 'よけるを選んだ！ 強い一撃を華麗によけた。';
+        } else if (choice === 'guard') {
+            const damage = Math.ceil(specialDamage / 2);
+            playerHp = Math.max(0, playerHp - damage);
+            message = `ガードを選んだ！ ${damage} ダメージに抑えた。`;
+        } else if (choice === 'press') {
+            monsterHp = Math.max(0, monsterHp - normalPlayerDamage);
+            nextAttackBonus = 0;
+            if (monsterHp > 0) playerHp = Math.max(0, playerHp - specialDamage);
+            message = monsterHp === 0
+                ? `攻め続けるを選んだ！ ${normalPlayerDamage} ダメージで倒した！`
+                : `攻め続けるを選んだ！ ${normalPlayerDamage} ダメージを与えたが、${specialDamage} ダメージを受けた。`;
+        } else {
+            return null;
+        }
+    } else if (pattern === 'weakness_exposure') {
+        if (choice === 'exploit') {
+            monsterHp = Math.max(0, monsterHp - weakPointDamage);
+            nextAttackBonus = 0;
+            if (monsterHp > 0) playerHp = Math.max(0, playerHp - normalDamage);
+            message = monsterHp === 0
+                ? `弱点を狙った！ ${weakPointDamage} ダメージで倒した！`
+                : `弱点を狙った！ ${weakPointDamage} ダメージを与えたが、${normalDamage} ダメージを受けた。`;
+        } else if (choice === 'safe') {
+            monsterHp = Math.max(0, monsterHp - normalPlayerDamage);
+            nextAttackBonus = 0;
+            message = monsterHp === 0
+                ? `安全に攻撃した！ ${normalPlayerDamage} ダメージで倒した！`
+                : `安全に攻撃した！ ${normalPlayerDamage} ダメージを与え、反撃を避けた。`;
+        } else {
+            return null;
+        }
+    } else if (pattern === 'interruptible') {
+        if (choice === 'interrupt') {
+            nextAttackBonus += 3;
+            message = '妨害するを選んだ！ 相手の準備を止め、次のこうげきが3強くなる。';
+        } else if (choice === 'continue') {
+            monsterHp = Math.max(0, monsterHp - normalPlayerDamage);
+            nextAttackBonus = 0;
+            if (monsterHp > 0) playerHp = Math.max(0, playerHp - specialDamage);
+            message = monsterHp === 0
+                ? `攻撃を続けるを選んだ！ ${normalPlayerDamage} ダメージで倒した！`
+                : `攻撃を続けるを選んだ！ ${normalPlayerDamage} ダメージを与えたが、${specialDamage} ダメージを受けた。`;
+        } else {
+            return null;
+        }
+    } else {
+        return null;
+    }
+
+    const won = monsterHp === 0;
+    const lost = playerHp === 0;
+    return {
+        monster_hp: monsterHp,
+        player_hp: playerHp,
+        status: won ? 'won' : lost ? 'lost' : 'active',
+        finished_at: won || lost ? now : null,
+        next_attack_bonus: nextAttackBonus,
+        special_reaction: { active: false, pattern: null, message: null, mechanic_index: null },
+        last_action_message: message
     };
 }
 
@@ -299,6 +437,25 @@ async function acquireActionLock(battleId, now = new Date()) {
             battle_id: battleId,
             status: 'active',
             expires_at: { $gt: now },
+            'special_reaction.active': { $ne: true },
+            $or: [
+                { action_lock: false },
+                { action_locked_at: { $lte: staleLockAt } }
+            ]
+        },
+        { $set: { action_lock: true, action_locked_at: now } },
+        { new: true }
+    );
+}
+
+async function acquireSpecialReactionLock(battleId, now = new Date()) {
+    const staleLockAt = new Date(now.getTime() - LOCK_STALE_AFTER_MS);
+    return Battle.findOneAndUpdate(
+        {
+            battle_id: battleId,
+            status: 'active',
+            expires_at: { $gt: now },
+            'special_reaction.active': true,
             $or: [
                 { action_lock: false },
                 { action_locked_at: { $lte: staleLockAt } }
@@ -367,7 +524,7 @@ async function attackBattle(battleId, now = new Date()) {
         return { changed: false, battle: currentBattle };
     }
 
-    const changes = resolveAttack(lockedBattle, now);
+    const changes = prepareSpecialReaction(lockedBattle, resolveAttack(lockedBattle, now));
     const battle = await finishBattle(lockedBattle, changes);
     return { changed: true, battle };
 }
@@ -428,8 +585,24 @@ async function useBattleItem(battleId, useType, now = new Date()) {
         return { changed: false, itemUnavailable: true, battle: lockedBattle };
     }
 
-    const battle = await finishBattle(lockedBattle, resolveItemAction(lockedBattle, item, now));
+    const battle = await finishBattle(
+        lockedBattle,
+        prepareSpecialReaction(lockedBattle, resolveItemAction(lockedBattle, item, now))
+    );
     return { changed: true, battle, item };
+}
+
+async function resolveSpecialReactionAction(battleId, choice, now = new Date()) {
+    const lockedBattle = await acquireSpecialReactionLock(battleId, now);
+    if (!lockedBattle) {
+        return { changed: false, battle: await Battle.findOne({ battle_id: battleId }) };
+    }
+    const changes = resolveSpecialReaction(lockedBattle, choice, now);
+    if (!changes) {
+        await releaseBattleLock(lockedBattle);
+        return { changed: false, invalidChoice: true, battle: lockedBattle };
+    }
+    return { changed: true, battle: await finishBattle(lockedBattle, changes) };
 }
 
 async function grantBattleReward(battle, now = new Date()) {
@@ -493,6 +666,11 @@ module.exports = {
     getCooldownRemainingMs,
     calculateDamage,
     resolveAttack,
+    normalizedSpecialPattern,
+    shouldTriggerSpecialReaction,
+    prepareSpecialReaction,
+    isSpecialReactionActive,
+    resolveSpecialReaction,
     battleItemEffect,
     chooseHealingItem,
     chooseRecommendedItem,
@@ -508,6 +686,7 @@ module.exports = {
     attackBattle,
     inspectBattle,
     useBattleItem,
+    resolveSpecialReactionAction,
     getBattleItemOptions,
     grantBattleReward,
     applyBattleCooldown,

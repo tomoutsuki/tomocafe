@@ -59,6 +59,46 @@ function createBattlePayload(battle, now = new Date(), options = {}) {
     };
 }
 
+function createSpecialReactionPayload(battle) {
+    const special = battle.special_reaction;
+    const isActive = battle.status === 'active' && special?.active;
+    const button = (action, label, style) => new ButtonBuilder()
+        .setCustomId(`battle:special_${action}:${battle.battle_id}`)
+        .setLabel(label)
+        .setStyle(style)
+        .setDisabled(!isActive);
+
+    let buttons;
+    if (special.pattern === 'heavy_attack_warning') {
+        buttons = [
+            button('dodge', 'よける', ButtonStyle.Primary),
+            button('guard', 'ガード', ButtonStyle.Secondary),
+            button('press', '攻め続ける', ButtonStyle.Danger)
+        ];
+    } else if (special.pattern === 'weakness_exposure') {
+        buttons = [
+            button('exploit', '弱点を狙う', ButtonStyle.Danger),
+            button('safe', '安全に攻撃', ButtonStyle.Primary)
+        ];
+    } else {
+        buttons = [
+            button('interrupt', '妨害する', ButtonStyle.Primary),
+            button('continue', '攻撃を続ける', ButtonStyle.Danger)
+        ];
+    }
+
+    return {
+        content: [
+            `⚠️ **${battle.monster_name}** の様子が変わった！`,
+            special.message,
+            '今だけ選択肢が変わっています。選んだ後は通常の行動に戻ります。',
+            `モンスターHP：${battle.monster_hp} / ${battle.monster_max_hp}`,
+            `プレイヤーHP：${battle.player_hp} / ${battle.player_max_hp}`
+        ].filter(Boolean).join('\n'),
+        components: [new ActionRowBuilder().addComponents(buttons)]
+    };
+}
+
 function createItemMenuPayload(battle, options) {
     const isActive = battle.status === 'active';
     const healingLabel = options.healingItem
@@ -96,6 +136,7 @@ function createItemMenuPayload(battle, options) {
 
 module.exports = {
     createBattlePayload,
+    createSpecialReactionPayload,
     createItemMenuPayload,
     remainingMinutes
 };

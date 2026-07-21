@@ -1,5 +1,19 @@
 const mongoose = require('mongoose');
 
+const BattleMechanicSchema = new mongoose.Schema({
+    pattern: { type: String, required: true },
+    trigger: { type: String, required: true },
+    message: { type: String, required: true },
+    hint: { type: String, required: true }
+}, { _id: false });
+
+const SpecialReactionSchema = new mongoose.Schema({
+    active: { type: Boolean, default: false },
+    pattern: { type: String, default: null },
+    message: { type: String, default: null },
+    mechanic_index: { type: Number, default: null }
+}, { _id: false });
+
 const BattleSchema = new mongoose.Schema({
     battle_id: { type: String, required: true, unique: true, index: true },
     // Discord snowflakes must remain strings; JavaScript Number loses precision.
@@ -19,6 +33,9 @@ const BattleSchema = new mongoose.Schema({
     monster_inspect_text: { type: String, default: '' },
     monster_tags: { type: [String], default: [] },
     monster_mechanic_hints: { type: [String], default: [] },
+    monster_mechanics: { type: [BattleMechanicSchema], default: [] },
+    monster_is_boss: { type: Boolean, default: false },
+    monster_difficulty: { type: Number, default: 1, min: 1 },
     monster_max_hp: { type: Number, required: true, min: 1 },
     monster_hp: { type: Number, required: true, min: 0 },
     monster_attack: { type: Number, required: true, min: 1 },
@@ -32,6 +49,8 @@ const BattleSchema = new mongoose.Schema({
     inspected: { type: Boolean, default: false },
     next_attack_bonus: { type: Number, default: 0, min: 0 },
     inspection_message: { type: String, default: null },
+    special_reaction: { type: SpecialReactionSchema, default: () => ({ active: false }) },
+    used_mechanic_indices: { type: [Number], default: [] },
     last_action_message: { type: String, default: null },
     expires_at: { type: Date, required: true, index: true },
     finished_at: { type: Date, default: null },

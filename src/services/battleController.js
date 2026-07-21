@@ -5,9 +5,15 @@ const {
     applyBattleCooldown,
     getBattleItemOptions,
     inspectBattle,
-    useBattleItem
+    useBattleItem,
+    isSpecialReactionActive,
+    resolveSpecialReactionAction
 } = require('./battleService');
-const { createBattlePayload, createItemMenuPayload } = require('./battleView');
+const {
+    createBattlePayload,
+    createItemMenuPayload,
+    createSpecialReactionPayload
+} = require('./battleView');
 const Battle = require('../models/Battle');
 const { parseBattleCustomId } = require('./battleCustomId');
 
@@ -23,6 +29,17 @@ async function handleBattleButton(interaction) {
 
     if (battle.player_id !== interaction.user.id) {
         await interaction.reply({ content: 'この戦闘を操作できるのは開始した本人だけです。', ephemeral: true });
+        return true;
+    }
+
+    if (parsed.action.startsWith('special_')) {
+        const choice = parsed.action.slice('special_'.length);
+        const result = await resolveSpecialReactionAction(parsed.battleId, choice);
+        return handleBattleResult(interaction, result);
+    }
+
+    if (isSpecialReactionActive(battle)) {
+        await interaction.update(createSpecialReactionPayload(battle));
         return true;
     }
 
@@ -50,7 +67,15 @@ async function handleBattleButton(interaction) {
         result = await cancelBattle(parsed.battleId);
     }
 
+    return handleBattleResult(interaction, result);
+}
+
+async function handleBattleResult(interaction, result) {
     if (!result.changed) {
+        if (isSpecialReactionActive(result.battle)) {
+            await interaction.update(createSpecialReactionPayload(result.battle));
+            return true;
+        }
         if (result.battle?.status === 'timed_out') {
             await interaction.update(await battlePayload(result.battle));
             return true;
@@ -73,6 +98,10 @@ async function handleBattleButton(interaction) {
             await interaction.reply({ content: '使えるアイテムがなくなりました。', ephemeral: true });
             return true;
         }
+        if (result.invalidChoice) {
+            await interaction.reply({ content: 'その選択は今は使えません。', ephemeral: true });
+            return true;
+        }
         await interaction.reply({
             content: 'この操作はすでに処理されています。',
             ephemeral: true
@@ -91,6 +120,9 @@ async function handleBattleButton(interaction) {
 }
 
 async function battlePayload(battle) {
+    if (isSpecialReactionActive(battle)) {
+        return createSpecialReactionPayload(battle);
+    }
     const options = await getBattleItemOptions(battle);
     return createBattlePayload(battle, new Date(), options);
 }
