@@ -1,4 +1,9 @@
-const { cancelBattle } = require('./battleService');
+const {
+    attackBattle,
+    cancelBattle,
+    grantBattleReward,
+    applyBattleCooldown
+} = require('./battleService');
 const { createBattlePayload } = require('./battleView');
 const Battle = require('../models/Battle');
 const { parseBattleCustomId } = require('./battleCustomId');
@@ -18,9 +23,21 @@ async function handleBattleButton(interaction) {
         return true;
     }
 
-    const result = await cancelBattle(parsed.battleId);
+    const result = parsed.action === 'attack'
+        ? await attackBattle(parsed.battleId)
+        : await cancelBattle(parsed.battleId);
     if (!result.changed) {
         if (result.battle?.status === 'timed_out') {
+            await interaction.update(createBattlePayload(result.battle));
+            return true;
+        }
+        if (result.battle?.status === 'won') {
+            const rewardedBattle = await grantBattleReward(result.battle);
+            await interaction.update(createBattlePayload(rewardedBattle));
+            return true;
+        }
+        if (result.battle?.status === 'lost') {
+            await applyBattleCooldown(result.battle);
             await interaction.update(createBattlePayload(result.battle));
             return true;
         }
@@ -31,7 +48,13 @@ async function handleBattleButton(interaction) {
         return true;
     }
 
-    await interaction.update(createBattlePayload(result.battle));
+    let completedBattle = result.battle;
+    if (completedBattle.status === 'won') {
+        completedBattle = await grantBattleReward(completedBattle);
+    } else if (completedBattle.status === 'lost') {
+        await applyBattleCooldown(completedBattle);
+    }
+    await interaction.update(createBattlePayload(completedBattle));
     return true;
 }
 

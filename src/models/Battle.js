@@ -25,6 +25,7 @@ const BattleSchema = new mongoose.Schema({
     player_attack: { type: Number, required: true, min: 1 },
     player_defense: { type: Number, required: true, min: 0 },
     turn: { type: Number, default: 0, min: 0 },
+    last_action_message: { type: String, default: null },
     expires_at: { type: Date, required: true, index: true },
     finished_at: { type: Date, default: null },
     action_lock: { type: Boolean, default: false },

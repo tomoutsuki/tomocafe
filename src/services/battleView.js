@@ -13,13 +13,18 @@ function battleStatusText(battle) {
     if (battle.status === 'timed_out') return '戦闘は時間切れになりました。';
     if (battle.status === 'won') return '勝利しました！';
     if (battle.status === 'lost') return '敗北しました。';
-    return 'フェーズ0の接続確認中です。攻撃はフェーズ1で有効になります。';
+    return '「こうげき」を押して、カフェモンスターを追い払おう！';
 }
 
 function createBattleComponents(battle) {
     const isActive = battle.status === 'active';
     return [
         new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`battle:attack:${battle.battle_id}`)
+                .setLabel('こうげき')
+                .setStyle(ButtonStyle.Danger)
+                .setDisabled(!isActive),
             new ButtonBuilder()
                 .setCustomId(`battle:cancel:${battle.battle_id}`)
                 .setLabel('戦闘を終了')
@@ -41,8 +46,9 @@ function createBattlePayload(battle, now = new Date()) {
             `プレイヤーHP：${battle.player_hp} / ${battle.player_max_hp}`,
             `報酬予定：${battle.reward_beans}豆`,
             timeText,
+            battle.last_action_message,
             battleStatusText(battle)
-        ].join('\n'),
+        ].filter(Boolean).join('\n'),
         components: createBattleComponents(battle)
     };
 }

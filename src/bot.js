@@ -75,6 +75,7 @@ client.on('messageCreate', async (message) => {
     const commandArgText = commandBody.slice(command.length).trim();
 
     switch (command.toUpperCase()) {
+        // ここから汎用コマンド
         case 'MENU':
         case 'メニュー':
             await Menu(message);
@@ -100,6 +101,7 @@ client.on('messageCreate', async (message) => {
             break;
     }
 
+    // ここからユーザーコマンド
     if (!(await isRegistered(message.author.id))) {
         await autoRegister(message.author.id, message);
     }
@@ -134,15 +136,12 @@ client.on('messageCreate', async (message) => {
             await Memo.showDeleteMemos(message);
             return;
 
-        case 'BATTLE':
-        case '戦闘':
-            await Battle(message);
-            return;
-
         default:
             break;
     }
 
+
+    // ここから管理者コマンド
     if (!(await isAdministrator(message))) {
         await message.reply({ content: 'このコマンドは管理者専用です。' });
         return;
@@ -176,6 +175,11 @@ client.on('messageCreate', async (message) => {
 
         case 'GUIDE':
             await Guide(message);
+            return;
+
+        case 'BATTLE':
+        case '戦闘':
+            await Battle(message);
             return;
 
         default:

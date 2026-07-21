@@ -11,8 +11,9 @@ const UserSchema = new mongoose.Schema({
 		attack: { type: Number, default: 10, min: 1 },
 		defense: { type: Number, default: 2, min: 0 }
 	},
-	// 報酬の二重付与を防ぐための戦闘ID。報酬処理は将来フェーズから利用する。
+	// 報酬の二重付与を防ぐための戦闘ID。
 	battle_reward_ids: { type: [String], default: [] },
+	battle_cooldown_until: { type: Date, default: null },
 	items: [
 		{
 			// アイテムマスターを参照
