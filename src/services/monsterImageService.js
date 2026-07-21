@@ -1,5 +1,9 @@
 const Monster = require('../models/Monster');
-const { buildDamageMonsterImageUrl, normalizedR2Url } = require('./monsterImageUrls');
+const {
+    buildDefaultMonsterImageUrl,
+    buildDamageMonsterImageUrl,
+    normalizedR2Url
+} = require('./monsterImageUrls');
 
 async function responseExists(response) {
     try {
@@ -34,4 +38,29 @@ async function refreshMissingDamageDiffs({ r2Url = process.env.R2_URL, fetchImpl
     return { checked: monsters.length, found };
 }
 
-module.exports = { refreshMissingDamageDiffs };
+async function refreshMissingDefaultImages({ r2Url = process.env.R2_URL, fetchImpl = global.fetch } = {}) {
+    if (!normalizedR2Url(r2Url) || typeof fetchImpl !== 'function') return { checked: 0, found: 0 };
+
+    const monsters = await Monster.find({ has_default_image: { $ne: true } }, { monster_id: 1 }).lean();
+    let found = 0;
+
+    for (const monster of monsters) {
+        const defaultUrl = buildDefaultMonsterImageUrl(monster.monster_id, r2Url);
+        try {
+            const response = await fetchImpl(defaultUrl, { method: 'GET' });
+            if (!await responseExists(response)) continue;
+
+            await Monster.updateOne(
+                { _id: monster._id, has_default_image: { $ne: true } },
+                { $set: { has_default_image: true, image_url: defaultUrl } }
+            );
+            found++;
+        } catch (error) {
+            console.warn(`Default image check failed for ${monster.monster_id}: ${error.message}`);
+        }
+    }
+
+    return { checked: monsters.length, found };
+}
+
+module.exports = { refreshMissingDamageDiffs, refreshMissingDefaultImages };

@@ -23,6 +23,9 @@ const MonsterSchema = new mongoose.Schema({
     appearance: String,
     behavior: String,
     image_url: { type: String, default: null },
+    // R2 の通常画像を実際に取得できた時だけ true にする。公開設定の反映前は
+    // 旧画像 URL をフォールバックとして表示し、空のサムネイルを避ける。
+    has_default_image: { type: Boolean, default: false },
     damage_image_url: { type: String, default: null },
     has_damage_diff: { type: Boolean, default: false },
     encounter_text: { type: String, required: true },

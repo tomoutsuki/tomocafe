@@ -32,6 +32,7 @@ const BattleSchema = new mongoose.Schema({
     monster_id: { type: String, required: true },
     monster_name: { type: String, required: true },
     monster_image_url: { type: String, default: null },
+    has_default_image: { type: Boolean, default: false },
     monster_damage_image_url: { type: String, default: null },
     has_damage_diff: { type: Boolean, default: false },
     show_damage_image: { type: Boolean, default: false },

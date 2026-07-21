@@ -61,6 +61,7 @@ function createBattleDraft({ player, playerId, playerDisplayName, playerAvatarUr
             || buildDefaultMonsterImageUrl(monster.monster_id)
             || monsterImages[monster.monster_id]
             || null,
+        has_default_image: Boolean(monster.has_default_image),
         monster_damage_image_url: monster.damage_image_url || null,
         has_damage_diff: Boolean(monster.has_damage_diff),
         monster_description: monster.appearance || monster.behavior || '',

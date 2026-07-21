@@ -306,7 +306,7 @@ test('special reaction view only exposes the matching two or three choices', () 
     );
 });
 
-test('battle embed keeps the current log prominent and limits past logs to two lines', () => {
+test('battle embed keeps only the current turn message and asks for the next action', () => {
     const payload = createBattlePayload({
         battle_id: '123e4567-e89b-12d3-a456-426614174000',
         status: 'active',
@@ -330,14 +330,47 @@ test('battle embed keeps the current log prominent and limits past logs to two l
     });
     const embed = payload.embeds[2].toJSON();
     assert.equal(createHpBar(24, 30), `${EMOJI.green_begin}${EMOJI.green_middle}${EMOJI.green_middle}${EMOJI.green_end}`);
-    assert.equal(createHpBar(1, 30), `${EMOJI.red_single}${EMOJI.gray_middle}${EMOJI.gray_middle}${EMOJI.gray_end}`);
+    assert.equal(createHpBar(1, 30), `${EMOJI.red_begin}${EMOJI.gray_middle}${EMOJI.gray_middle}${EMOJI.gray_end}`);
     assert.equal(createHpBar(0, 30), `${EMOJI.gray_begin}${EMOJI.gray_middle}${EMOJI.gray_middle}${EMOJI.gray_end}`);
-    assert.match(embed.description, /^\*\*今回のこうげき！ 9ダメージ！\*\*$/);
-    const recentField = embed.fields.find((field) => field.name === '最近のログ');
-    assert.equal(recentField.value.split('\n').length, 2);
-    assert.match(recentField.value, /二つ前の行動/);
-    assert.match(recentField.value, /一つ前の行動/);
+    assert.equal(embed.description, '**今回のこうげき！ 9ダメージ！**\n\nどうする？');
+    assert.equal(embed.fields?.length || 0, 0);
     assert.equal(recentLogLines({ recent_logs: [], last_action_message: 'x' }).length, 0);
+});
+
+test('unverified R2 image uses the legacy thumbnail, then switches after verification', () => {
+    const battle = {
+        battle_id: '123e4567-e89b-12d3-a456-426614174000',
+        status: 'active',
+        monster_id: 'expresso_slime',
+        monster_name: 'エスプレッソ・スライム',
+        monster_image_url: 'https://assets.example.test/default/expresso_slime.png',
+        monster_hp: 28,
+        monster_max_hp: 28,
+        player_hp: 30,
+        player_max_hp: 30,
+        expires_at: '2026-07-21T12:30:00.000Z',
+        inspected: false
+    };
+    const fallbackThumbnail = createBattlePayload(battle).embeds[1].toJSON().thumbnail.url;
+    const r2Thumbnail = createBattlePayload({ ...battle, has_default_image: true }).embeds[1].toJSON().thumbnail.url;
+
+    assert.equal(fallbackThumbnail, 'https://i.imgur.com/3kNNOnu.png');
+    assert.equal(r2Thumbnail, 'https://assets.example.test/default/expresso_slime.png');
+});
+
+test('victory replaces the battle screen with one victory embed and no buttons', () => {
+    const payload = createBattlePayload({
+        battle_id: '123e4567-e89b-12d3-a456-426614174000',
+        status: 'won',
+        monster_id: 'expresso_slime',
+        monster_name: 'エスプレッソ・スライム',
+        monster_image_url: 'https://assets.example.test/default/expresso_slime.png',
+        last_action_message: '勝利！ 報酬として 3豆を受け取った！'
+    });
+
+    assert.equal(payload.embeds.length, 1);
+    assert.deepEqual(payload.components, []);
+    assert.equal(payload.embeds[0].toJSON().title, '🎉 戦闘勝利！');
 });
 
 test('expired battles are recognized without relying on bot process memory', () => {

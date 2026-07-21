@@ -49,7 +49,7 @@ const Inventory = require('./helpers/inventory.js');
 const Memo = require('./helpers/memo.js');
 const Battle = require('./helpers/battle.js');
 const { expireStaleBattles } = require('./services/battleService');
-const { refreshMissingDamageDiffs } = require('./services/monsterImageService');
+const { refreshMissingDefaultImages, refreshMissingDamageDiffs } = require('./services/monsterImageService');
 
 client.commands = new Collection();
 client.commandArray = [];
@@ -227,6 +227,9 @@ async function startBot() {
         console.log(`Mongo Connected via ${mongoConnection.connectionSource}`);
 
         await expireStaleBattles();
+        refreshMissingDefaultImages()
+            .then(({ checked, found }) => console.log(`Monster default image check: ${found}/${checked} found.`))
+            .catch((error) => console.error('Monster default image check failed:', error));
         refreshMissingDamageDiffs()
             .then(({ checked, found }) => console.log(`Monster damage image check: ${found}/${checked} found.`))
             .catch((error) => console.error('Monster damage image check failed:', error));

@@ -36,9 +36,12 @@ async function seedMonsters() {
                     image_url: buildDefaultMonsterImageUrl(monster.monster_id, r2Url)
                 },
                 $setOnInsert: {
+                    has_default_image: false,
                     has_damage_diff: false,
                     damage_image_url: null
-                }
+                },
+                // R2 移行前の補助 URL を残さず、画像 URL は R2 のものに統一する。
+                $unset: { fallback_image_url: '' }
             },
             upsert: true
         }

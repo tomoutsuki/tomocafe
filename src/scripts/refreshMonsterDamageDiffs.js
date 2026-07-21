@@ -1,12 +1,15 @@
 const { appEnv, assertRequiredEnv } = require('../config/environment');
 const { connectToMongo, mongoose } = require('../config/mongo');
-const { refreshMissingDamageDiffs } = require('../services/monsterImageService');
+const { refreshMissingDefaultImages, refreshMissingDamageDiffs } = require('../services/monsterImageService');
 
 async function refresh() {
     assertRequiredEnv(['MONGO_URI', 'R2_URL']);
     const connection = await connectToMongo();
-    const result = await refreshMissingDamageDiffs();
-    console.log(`[monster damage refresh] ${appEnv} via ${connection.connectionSource}: ${result.found}/${result.checked} found.`);
+    const [defaultResult, damageResult] = await Promise.all([
+        refreshMissingDefaultImages(),
+        refreshMissingDamageDiffs()
+    ]);
+    console.log(`[monster image refresh] ${appEnv} via ${connection.connectionSource}: default ${defaultResult.found}/${defaultResult.checked}, damage ${damageResult.found}/${damageResult.checked} found.`);
 }
 
 refresh()
