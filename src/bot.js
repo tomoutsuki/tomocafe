@@ -49,6 +49,7 @@ const Inventory = require('./helpers/inventory.js');
 const Memo = require('./helpers/memo.js');
 const Battle = require('./helpers/battle.js');
 const { expireStaleBattles } = require('./services/battleService');
+const { refreshMissingDamageDiffs } = require('./services/monsterImageService');
 
 client.commands = new Collection();
 client.commandArray = [];
@@ -226,6 +227,9 @@ async function startBot() {
         console.log(`Mongo Connected via ${mongoConnection.connectionSource}`);
 
         await expireStaleBattles();
+        refreshMissingDamageDiffs()
+            .then(({ checked, found }) => console.log(`Monster damage image check: ${found}/${checked} found.`))
+            .catch((error) => console.error('Monster damage image check failed:', error));
         const battleSweep = setInterval(() => {
             expireStaleBattles().catch((error) => console.error('Battle timeout sweep failed:', error));
         }, 5 * 60 * 1000);

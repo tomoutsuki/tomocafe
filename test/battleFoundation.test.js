@@ -18,9 +18,14 @@ const {
 } = require('../src/services/battleService');
 const { parseBattleCustomId } = require('../src/services/battleCustomId');
 const {
+    buildDefaultMonsterImageUrl,
+    buildDamageMonsterImageUrl
+} = require('../src/services/monsterImageUrls');
+const {
     createBattlePayload,
     createItemMenuPayload,
     createSpecialReactionPayload,
+    EMOJI,
     createHpBar,
     recentLogLines
 } = require('../src/services/battleView');
@@ -55,6 +60,12 @@ test('battle draft snapshots player and monster stats for restart-safe storage',
     assert.ok(draft.monster_tags.includes('コーヒー'));
     assert.equal(draft.monster_image_url, 'https://i.imgur.com/3kNNOnu.png');
     assert.ok(draft.expires_at > now);
+});
+
+test('R2 monster image URLs use separate default and damage folders', () => {
+    const r2Url = 'https://assets.example.test/';
+    assert.equal(buildDefaultMonsterImageUrl('expresso_slime', r2Url), 'https://assets.example.test/default/expresso_slime.png');
+    assert.equal(buildDamageMonsterImageUrl('expresso_slime', r2Url), 'https://assets.example.test/damage/expresso_slime.png');
 });
 
 test('legacy users receive safe default battle stats', () => {
@@ -126,9 +137,11 @@ test('phase 2 active battle renders exactly attack, item, and inspect buttons', 
     }, new Date('2026-07-21T12:00:00.000Z'), { hasUsableItems: true });
 
     const buttons = payload.components[0].toJSON().components;
-    const embed = payload.embeds[0].toJSON();
-    assert.match(embed.description, /^\*\*/);
-    assert.equal(embed.thumbnail.url, 'https://i.imgur.com/3kNNOnu.png');
+    assert.equal(payload.embeds.length, 3);
+    const logEmbed = payload.embeds[2].toJSON();
+    const monsterEmbed = payload.embeds[1].toJSON();
+    assert.match(logEmbed.description, /^\*\*/);
+    assert.equal(monsterEmbed.thumbnail.url, 'https://i.imgur.com/3kNNOnu.png');
     assert.deepEqual(buttons.map((button) => button.custom_id), [
         'battle:attack:123e4567-e89b-12d3-a456-426614174000',
         'battle:item:123e4567-e89b-12d3-a456-426614174000',
@@ -315,8 +328,10 @@ test('battle embed keeps the current log prominent and limits past logs to two l
             { message: '今回のこうげき！ 9ダメージ！' }
         ]
     });
-    const embed = payload.embeds[0].toJSON();
-    assert.equal(createHpBar(24, 30), '▰▰▰▰▰▰▰▰▱▱');
+    const embed = payload.embeds[2].toJSON();
+    assert.equal(createHpBar(24, 30), `${EMOJI.green_begin}${EMOJI.green_middle}${EMOJI.green_middle}${EMOJI.green_end}`);
+    assert.equal(createHpBar(1, 30), `${EMOJI.red_single}${EMOJI.gray_middle}${EMOJI.gray_middle}${EMOJI.gray_end}`);
+    assert.equal(createHpBar(0, 30), `${EMOJI.gray_begin}${EMOJI.gray_middle}${EMOJI.gray_middle}${EMOJI.gray_end}`);
     assert.match(embed.description, /^\*\*今回のこうげき！ 9ダメージ！\*\*$/);
     const recentField = embed.fields.find((field) => field.name === '最近のログ');
     assert.equal(recentField.value.split('\n').length, 2);

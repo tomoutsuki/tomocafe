@@ -31,7 +31,9 @@ module.exports = async (message) => {
         playerAvatarUrl: message.author.displayAvatarURL({ extension: 'png', size: 128 }),
         monster,
         guildId: message.guildId,
-        channelId: message.channelId
+        channelId: message.channelId,
+        // 管理者向けの !戦闘 はバランス検証用なので連続テストを許可する。
+        ignoreCooldown: true
     });
 
     if (!created) {

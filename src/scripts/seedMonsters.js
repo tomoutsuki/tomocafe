@@ -3,6 +3,7 @@ const { appEnv, assertRequiredEnv } = require('../config/environment');
 const { connectToMongo, mongoose } = require('../config/mongo');
 const Monster = require('../models/Monster');
 const source = require(path.join('..', 'data', 'monsters.json'));
+const { buildDefaultMonsterImageUrl, normalizedR2Url } = require('../services/monsterImageUrls');
 
 function validateSeed(monsters) {
     const normal = monsters.filter((monster) => !monster.is_boss);
@@ -21,14 +22,24 @@ function validateSeed(monsters) {
 }
 
 async function seedMonsters() {
-    assertRequiredEnv(['MONGO_URI']);
+    assertRequiredEnv(['MONGO_URI', 'R2_URL']);
     validateSeed(source.monsters);
 
     const connection = await connectToMongo();
+    const r2Url = normalizedR2Url();
     const operations = source.monsters.map((monster) => ({
         updateOne: {
             filter: { monster_id: monster.monster_id },
-            update: { $set: monster },
+            update: {
+                $set: {
+                    ...monster,
+                    image_url: buildDefaultMonsterImageUrl(monster.monster_id, r2Url)
+                },
+                $setOnInsert: {
+                    has_damage_diff: false,
+                    damage_image_url: null
+                }
+            },
             upsert: true
         }
     }));

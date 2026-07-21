@@ -3,6 +3,7 @@ const Battle = require('../models/Battle');
 const User = require('../models/User');
 const ItemMaster = require('../models/ItemMaster');
 const monsterImages = require('../data/monsterImages');
+const { buildDefaultMonsterImageUrl } = require('./monsterImageUrls');
 
 const DEFAULT_TIMEOUT_MINUTES = 30;
 const LOCK_STALE_AFTER_MS = 15 * 1000;
@@ -56,7 +57,12 @@ function createBattleDraft({ player, playerId, playerDisplayName, playerAvatarUr
         channel_id: channelId || null,
         monster_id: monster.monster_id,
         monster_name: monster.name_ja,
-        monster_image_url: monsterImages[monster.monster_id] || null,
+        monster_image_url: monster.image_url
+            || buildDefaultMonsterImageUrl(monster.monster_id)
+            || monsterImages[monster.monster_id]
+            || null,
+        monster_damage_image_url: monster.damage_image_url || null,
+        has_damage_diff: Boolean(monster.has_damage_diff),
         monster_description: monster.appearance || monster.behavior || '',
         monster_inspect_text: monster.inspect_text || '',
         monster_tags: [...new Set([...(monster.tags || []), monster.category].filter(Boolean))],
@@ -135,7 +141,8 @@ function resolveAttack(battle, now = new Date()) {
             status: 'won',
             finished_at: now,
             next_attack_bonus: 0,
-            last_action_message: `あなたのこうげき！ ${battle.monster_name} に ${playerDamage} ダメージ！${insightBonus ? ' 調査のひらめきが効いた！' : ''} 倒した！`
+            show_damage_image: true,
+            last_action_message: `⚔️ こうげき！ ${battle.monster_name} **HP -${playerDamage}**${insightBonus ? '（調査のひらめき）' : ''}。倒した！`
         };
     }
 
@@ -150,9 +157,10 @@ function resolveAttack(battle, now = new Date()) {
         status: lost ? 'lost' : 'active',
         finished_at: lost ? now : null,
         next_attack_bonus: 0,
+        show_damage_image: true,
         last_action_message: lost
-            ? `あなたのこうげき！ ${battle.monster_name} に ${playerDamage} ダメージ！${insightBonus ? ' 調査のひらめきが効いた！' : ''}\n${battle.monster_name} の反撃！ ${monsterDamage} ダメージを受け、力尽きた…。`
-            : `あなたのこうげき！ ${battle.monster_name} に ${playerDamage} ダメージ！${insightBonus ? ' 調査のひらめきが効いた！' : ''}\n${battle.monster_name} の反撃！ ${monsterDamage} ダメージを受けた。`
+            ? `⚔️ こうげき！ ${battle.monster_name} **HP -${playerDamage}**${insightBonus ? '（調査のひらめき）' : ''}。\n💥 ${battle.monster_name} の反撃！ あなた **HP -${monsterDamage}**。力尽きた…。`
+            : `⚔️ こうげき！ ${battle.monster_name} **HP -${playerDamage}**${insightBonus ? '（調査のひらめき）' : ''}。\n💥 ${battle.monster_name} の反撃！ あなた **HP -${monsterDamage}**。`
     };
 }
 
@@ -195,7 +203,8 @@ function prepareSpecialReaction(battle, changes, random = Math.random) {
             mechanic_index: mechanicIndex
         },
         last_action_message: `⚠️ ${mechanic.message}`,
-        log_entries: [changes.last_action_message, `⚠️ ${mechanic.message}`]
+        log_entries: [changes.last_action_message, `⚠️ ${mechanic.message}`],
+        show_damage_image: false
     };
 }
 
@@ -214,6 +223,7 @@ function resolveSpecialReaction(battle, choice, now = new Date()) {
     let playerHp = battle.player_hp;
     let nextAttackBonus = battle.next_attack_bonus || 0;
     let message;
+    let showDamageImage = false;
 
     if (pattern === 'heavy_attack_warning') {
         if (choice === 'dodge') {
@@ -223,29 +233,32 @@ function resolveSpecialReaction(battle, choice, now = new Date()) {
             playerHp = Math.max(0, playerHp - damage);
             message = `ガードを選んだ！ ${damage} ダメージに抑えた。`;
         } else if (choice === 'press') {
+            showDamageImage = true;
             monsterHp = Math.max(0, monsterHp - normalPlayerDamage);
             nextAttackBonus = 0;
             if (monsterHp > 0) playerHp = Math.max(0, playerHp - specialDamage);
             message = monsterHp === 0
-                ? `攻め続けるを選んだ！ ${normalPlayerDamage} ダメージで倒した！`
-                : `攻め続けるを選んだ！ ${normalPlayerDamage} ダメージを与えたが、${specialDamage} ダメージを受けた。`;
+                ? `⚔️ 攻め続ける！ ${battle.monster_name} **HP -${normalPlayerDamage}**。倒した！`
+                : `⚔️ 攻め続ける！ ${battle.monster_name} **HP -${normalPlayerDamage}**。💥 あなた **HP -${specialDamage}**。`;
         } else {
             return null;
         }
     } else if (pattern === 'weakness_exposure') {
         if (choice === 'exploit') {
+            showDamageImage = true;
             monsterHp = Math.max(0, monsterHp - weakPointDamage);
             nextAttackBonus = 0;
             if (monsterHp > 0) playerHp = Math.max(0, playerHp - normalDamage);
             message = monsterHp === 0
-                ? `弱点を狙った！ ${weakPointDamage} ダメージで倒した！`
-                : `弱点を狙った！ ${weakPointDamage} ダメージを与えたが、${normalDamage} ダメージを受けた。`;
+                ? `🎯 弱点を狙う！ ${battle.monster_name} **HP -${weakPointDamage}**。倒した！`
+                : `🎯 弱点を狙う！ ${battle.monster_name} **HP -${weakPointDamage}**。💥 あなた **HP -${normalDamage}**。`;
         } else if (choice === 'safe') {
+            showDamageImage = true;
             monsterHp = Math.max(0, monsterHp - normalPlayerDamage);
             nextAttackBonus = 0;
             message = monsterHp === 0
-                ? `安全に攻撃した！ ${normalPlayerDamage} ダメージで倒した！`
-                : `安全に攻撃した！ ${normalPlayerDamage} ダメージを与え、反撃を避けた。`;
+                ? `⚔️ 安全に攻撃！ ${battle.monster_name} **HP -${normalPlayerDamage}**。倒した！`
+                : `⚔️ 安全に攻撃！ ${battle.monster_name} **HP -${normalPlayerDamage}**。反撃を避けた！`;
         } else {
             return null;
         }
@@ -254,12 +267,13 @@ function resolveSpecialReaction(battle, choice, now = new Date()) {
             nextAttackBonus += 3;
             message = '妨害するを選んだ！ 相手の準備を止め、次のこうげきが3強くなる。';
         } else if (choice === 'continue') {
+            showDamageImage = true;
             monsterHp = Math.max(0, monsterHp - normalPlayerDamage);
             nextAttackBonus = 0;
             if (monsterHp > 0) playerHp = Math.max(0, playerHp - specialDamage);
             message = monsterHp === 0
-                ? `攻撃を続けるを選んだ！ ${normalPlayerDamage} ダメージで倒した！`
-                : `攻撃を続けるを選んだ！ ${normalPlayerDamage} ダメージを与えたが、${specialDamage} ダメージを受けた。`;
+                ? `⚔️ 攻撃を続ける！ ${battle.monster_name} **HP -${normalPlayerDamage}**。倒した！`
+                : `⚔️ 攻撃を続ける！ ${battle.monster_name} **HP -${normalPlayerDamage}**。💥 あなた **HP -${specialDamage}**。`;
         } else {
             return null;
         }
@@ -275,6 +289,7 @@ function resolveSpecialReaction(battle, choice, now = new Date()) {
         status: won ? 'won' : lost ? 'lost' : 'active',
         finished_at: won || lost ? now : null,
         next_attack_bonus: nextAttackBonus,
+        show_damage_image: showDamageImage,
         special_reaction: { active: false, pattern: null, message: null, mechanic_index: null },
         last_action_message: message
     };
@@ -346,10 +361,11 @@ function resolveItemAction(battle, item, now = new Date()) {
     if (effect.kind === 'heal') {
         const healedAmount = Math.min(effect.value, battle.player_max_hp - playerHp);
         playerHp += healedAmount;
-        actionMessage = `${item.title} を使った！ HPが ${healedAmount} 回復した。`;
+        actionMessage = `☕ ${item.title} を使った！ あなた **HP +${healedAmount}**。`;
     } else {
+        // 弱点アイテムが命中した時だけ、差分画像を表示する。
         monsterHp = Math.max(0, monsterHp - effect.value);
-        actionMessage = `${item.title} を使った！ ${battle.monster_name} に ${effect.value} ダメージ！`;
+        actionMessage = `✨ ${item.title} を使った！ ${battle.monster_name} **HP -${effect.value}**。`;
         if (monsterHp === 0) {
             return {
                 monster_hp: 0,
@@ -357,6 +373,7 @@ function resolveItemAction(battle, item, now = new Date()) {
                 turn: nextTurn,
                 status: 'won',
                 finished_at: now,
+                show_damage_image: true,
                 last_action_message: `${actionMessage} 倒した！`
             };
         }
@@ -371,9 +388,10 @@ function resolveItemAction(battle, item, now = new Date()) {
         turn: nextTurn,
         status: lost ? 'lost' : 'active',
         finished_at: lost ? now : null,
+        show_damage_image: effect.kind === 'weakness',
         last_action_message: lost
-            ? `${actionMessage}\n${battle.monster_name} の反撃！ ${monsterDamage} ダメージを受け、力尽きた…。`
-            : `${actionMessage}\n${battle.monster_name} の反撃！ ${monsterDamage} ダメージを受けた。`
+            ? `${actionMessage}\n💥 ${battle.monster_name} の反撃！ あなた **HP -${monsterDamage}**。力尽きた…。`
+            : `${actionMessage}\n💥 ${battle.monster_name} の反撃！ あなた **HP -${monsterDamage}**。`
     };
 }
 
@@ -394,14 +412,14 @@ function buildInspectionMessage(battle) {
     ].join('\n');
 }
 
-async function createSoloBattle({ player, playerId, playerDisplayName, playerAvatarUrl, monster, guildId, channelId, now = new Date() }) {
+async function createSoloBattle({ player, playerId, playerDisplayName, playerAvatarUrl, monster, guildId, channelId, ignoreCooldown = false, now = new Date() }) {
     const activeBattle = await findActiveBattleForPlayer(playerId || player.user_id, now);
     if (activeBattle) {
         return { battle: activeBattle, created: false };
     }
 
     const cooldownRemainingMs = getCooldownRemainingMs(player, now);
-    if (cooldownRemainingMs > 0) {
+    if (!ignoreCooldown && cooldownRemainingMs > 0) {
         return { battle: null, created: false, cooldownRemainingMs };
     }
 
@@ -562,7 +580,8 @@ async function inspectBattle(battleId, now = new Date()) {
         inspected: true,
         next_attack_bonus: 3,
         inspection_message: inspectionMessage,
-        last_action_message: inspectionMessage
+        last_action_message: inspectionMessage,
+        show_damage_image: false
     });
     return { changed: true, battle };
 }
