@@ -47,6 +47,8 @@ const Daily = require('./helpers/daily.js');
 const Balance = require('./helpers/balance.js');
 const Inventory = require('./helpers/inventory.js');
 const Memo = require('./helpers/memo.js');
+const Battle = require('./helpers/battle.js');
+const { expireStaleBattles } = require('./services/battleService');
 
 client.commands = new Collection();
 client.commandArray = [];
@@ -132,6 +134,11 @@ client.on('messageCreate', async (message) => {
             await Memo.showDeleteMemos(message);
             return;
 
+        case 'BATTLE':
+        case '戦闘':
+            await Battle(message);
+            return;
+
         default:
             break;
     }
@@ -213,6 +220,12 @@ async function startBot() {
 
         const mongoConnection = await connectToMongo();
         console.log(`Mongo Connected via ${mongoConnection.connectionSource}`);
+
+        await expireStaleBattles();
+        const battleSweep = setInterval(() => {
+            expireStaleBattles().catch((error) => console.error('Battle timeout sweep failed:', error));
+        }, 5 * 60 * 1000);
+        battleSweep.unref();
 
         mongoose.connection.on('error', (error) => {
             console.error('MongoDB connection error:', error);

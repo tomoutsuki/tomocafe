@@ -1,5 +1,6 @@
 const fs = require('fs');
 const Shop = require('../../game/shopManager');
+const { handleBattleButton } = require('../../services/battleController');
 
 module.exports = {
     name: "interactionCreate",
@@ -58,6 +59,10 @@ module.exports = {
             }*/
         }
         if (interaction.isButton()) {
+
+            if (await handleBattleButton(interaction)) {
+                return;
+            }
 
             let [customId, ...args] = interaction.customId.split('@');
             console.log(args);

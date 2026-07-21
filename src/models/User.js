@@ -5,6 +5,14 @@ const UserSchema = new mongoose.Schema({
 	join_date: { type: Date, default: Date.now },
 	last_daily_claim: { type: Date, default: () => new Date(Date.now() - 24*60*60*1000) }, // 初回は登録24時間前に設定
 	beans: { type: Number, default: 0 },
+	// 戦闘用の基礎ステータス。現在HPは戦闘ごとに Battle 側へ保存する。
+	stats: {
+		max_hp: { type: Number, default: 30, min: 1 },
+		attack: { type: Number, default: 10, min: 1 },
+		defense: { type: Number, default: 2, min: 0 }
+	},
+	// 報酬の二重付与を防ぐための戦闘ID。報酬処理は将来フェーズから利用する。
+	battle_reward_ids: { type: [String], default: [] },
 	items: [
 		{
 			// アイテムマスターを参照

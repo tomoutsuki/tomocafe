@@ -13,7 +13,11 @@
     "web:prod": "node src/server.js --app-env=production",
     "dev": "concurrently \"node src/bot.js --app-env=development\" \"node src/server.js --app-env=development\"",
     "dev:combined": "node src/combined.js --app-env=development",
-    "prod:combined": "node src/combined.js --app-env=production"
+    "prod:combined": "node src/combined.js --app-env=production",
+    "monsters:seed": "node src/scripts/seedMonsters.js",
+    "monsters:seed:dev": "node src/scripts/seedMonsters.js --app-env=development",
+    "monsters:seed:prod": "node src/scripts/seedMonsters.js --app-env=production",
+    "test": "node --test"
   },
   "repository": {
     "type": "git",
