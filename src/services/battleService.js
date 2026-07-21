@@ -118,6 +118,25 @@ async function findActiveBattleForPlayer(playerId, now = new Date()) {
     }).sort({ createdAt: -1 });
 }
 
+// 開発用 !戦闘 は再開ではなくリセットを意図する。ロック中の戦闘も終了し、
+// 部分ユニークインデックスを解放して直後に新しい戦闘を作れるようにする。
+async function resetActiveBattleForPlayer(playerId, now = new Date()) {
+    await expireStaleBattles(now);
+    return Battle.findOneAndUpdate(
+        { player_id: String(playerId), status: 'active' },
+        {
+            $set: {
+                status: 'cancelled',
+                finished_at: now,
+                action_lock: false,
+                action_locked_at: null,
+                last_action_message: '新しいテスト戦闘を開始したため、この戦闘は終了しました。'
+            }
+        },
+        { new: true, sort: { createdAt: -1 } }
+    );
+}
+
 function getCooldownRemainingMs(user, now = new Date()) {
     const cooldownUntil = user?.battle_cooldown_until;
     if (!cooldownUntil) return 0;
@@ -413,8 +432,12 @@ function buildInspectionMessage(battle) {
     ].join('\n');
 }
 
-async function createSoloBattle({ player, playerId, playerDisplayName, playerAvatarUrl, monster, guildId, channelId, ignoreCooldown = false, now = new Date() }) {
-    const activeBattle = await findActiveBattleForPlayer(playerId || player.user_id, now);
+async function createSoloBattle({ player, playerId, playerDisplayName, playerAvatarUrl, monster, guildId, channelId, ignoreCooldown = false, forceRestart = false, now = new Date() }) {
+    const effectivePlayerId = playerId || player.user_id;
+    const replacedBattle = forceRestart
+        ? await resetActiveBattleForPlayer(effectivePlayerId, now)
+        : null;
+    const activeBattle = await findActiveBattleForPlayer(effectivePlayerId, now);
     if (activeBattle) {
         return { battle: activeBattle, created: false };
     }
@@ -428,7 +451,7 @@ async function createSoloBattle({ player, playerId, playerDisplayName, playerAva
     try {
         battle = await Battle.create(createBattleDraft({
             player,
-            playerId,
+            playerId: effectivePlayerId,
             playerDisplayName,
             playerAvatarUrl,
             monster,
@@ -438,7 +461,7 @@ async function createSoloBattle({ player, playerId, playerDisplayName, playerAva
         }));
     } catch (error) {
         if (error?.code === 11000) {
-            const concurrentBattle = await findActiveBattleForPlayer(playerId || player.user_id, now);
+            const concurrentBattle = await findActiveBattleForPlayer(effectivePlayerId, now);
             if (concurrentBattle) {
                 return { battle: concurrentBattle, created: false };
             }
@@ -446,7 +469,7 @@ async function createSoloBattle({ player, playerId, playerDisplayName, playerAva
         throw error;
     }
 
-    return { battle, created: true };
+    return { battle, created: true, replacedBattle };
 }
 
 async function saveBattleMessageId(battleId, messageId) {
@@ -537,11 +560,14 @@ async function finishBattle(battle, changes) {
     if (entries.length > 0) {
         update.$push = { recent_logs: { $each: entries, $slice: -12 } };
     }
-    return Battle.findOneAndUpdate(
-        { _id: battle._id, action_lock: true },
+    const updatedBattle = await Battle.findOneAndUpdate(
+        { _id: battle._id, status: 'active', action_lock: true },
         update,
         { new: true }
     );
+    // !戦闘 によるリセットが処理中の行動と競合した場合、終了済みの古い戦闘を
+    // 再び active に戻さない。呼び出し側はその終了状態を安全に表示できる。
+    return updatedBattle || Battle.findById(battle._id);
 }
 
 async function attackBattle(battleId, now = new Date()) {
@@ -721,6 +747,7 @@ module.exports = {
     isExpired,
     expireStaleBattles,
     findActiveBattleForPlayer,
+    resetActiveBattleForPlayer,
     createSoloBattle,
     saveBattleMessageId,
     cancelBattle,

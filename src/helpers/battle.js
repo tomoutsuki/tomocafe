@@ -33,7 +33,9 @@ module.exports = async (message) => {
         guildId: message.guildId,
         channelId: message.channelId,
         // 管理者向けの !戦闘 はバランス検証用なので連続テストを許可する。
-        ignoreCooldown: true
+        ignoreCooldown: true,
+        // 既存の進行中戦闘を再開せず、必ず終了して新しいテスト戦闘を作る。
+        forceRestart: true
     });
 
     if (!created) {
@@ -47,7 +49,8 @@ module.exports = async (message) => {
         const payload = createBattlePayload(battle, new Date(), itemOptions);
         await message.reply({
             content: 'すでに進行中の戦闘があります。',
-            embeds: payload.embeds
+            embeds: payload.embeds,
+            components: payload.components
         });
         return;
     }

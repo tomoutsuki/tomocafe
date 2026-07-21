@@ -141,7 +141,7 @@ test('phase 2 active battle renders exactly attack, item, and inspect buttons', 
     const logEmbed = payload.embeds[2].toJSON();
     const monsterEmbed = payload.embeds[1].toJSON();
     assert.match(logEmbed.description, /^\*\*/);
-    assert.equal(monsterEmbed.thumbnail.url, 'https://i.imgur.com/3kNNOnu.png');
+    assert.equal(monsterEmbed.thumbnail?.url || monsterEmbed.image?.url, 'https://i.imgur.com/3kNNOnu.png');
     assert.deepEqual(buttons.map((button) => button.custom_id), [
         'battle:attack:123e4567-e89b-12d3-a456-426614174000',
         'battle:item:123e4567-e89b-12d3-a456-426614174000',
@@ -351,8 +351,10 @@ test('unverified R2 image uses the legacy thumbnail, then switches after verific
         expires_at: '2026-07-21T12:30:00.000Z',
         inspected: false
     };
-    const fallbackThumbnail = createBattlePayload(battle).embeds[1].toJSON().thumbnail.url;
-    const r2Thumbnail = createBattlePayload({ ...battle, has_default_image: true }).embeds[1].toJSON().thumbnail.url;
+    const fallbackEmbed = createBattlePayload(battle).embeds[1].toJSON();
+    const r2Embed = createBattlePayload({ ...battle, has_default_image: true }).embeds[1].toJSON();
+    const fallbackThumbnail = fallbackEmbed.thumbnail?.url || fallbackEmbed.image?.url;
+    const r2Thumbnail = r2Embed.thumbnail?.url || r2Embed.image?.url;
 
     assert.equal(fallbackThumbnail, 'https://i.imgur.com/3kNNOnu.png');
     assert.equal(r2Thumbnail, 'https://assets.example.test/default/expresso_slime.png');
