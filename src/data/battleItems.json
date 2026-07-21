@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0.0",
+  "collection": "item_master",
+  "items": [
+    {
+      "item_id": "welcome_coffee",
+      "title": "ウェルカムコーヒー",
+      "description": "友カフェにようこそ。ほっと一息つくと、少し元気が戻る。",
+      "rarity": "ノーマル",
+      "market_price": 0,
+      "battle_effect": { "kind": "heal", "value": 8, "target_tags": [] }
+    },
+    {
+      "item_id": "warm_milk",
+      "title": "温かいミルク",
+      "description": "熱々のミルク。コーヒー系カフェモンスターの動きを鈍らせる。",
+      "rarity": "ノーマル",
+      "market_price": 8,
+      "battle_effect": { "kind": "weakness", "value": 5, "target_tags": ["コーヒー"] }
+    },
+    {
+      "item_id": "sugar_cube",
+      "title": "角砂糖",
+      "description": "甘い香りで、かわいいモンスターの気をそらす。",
+      "rarity": "ノーマル",
+      "market_price": 6,
+      "battle_effect": { "kind": "weakness", "value": 4, "target_tags": ["アルパカ", "かわいい"] }
+    },
+    {
+      "item_id": "sticky_syrup",
+      "title": "とろとろシロップ",
+      "description": "羽や浮遊する相手の動きをゆっくりにする。",
+      "rarity": "レア",
+      "market_price": 12,
+      "battle_effect": { "kind": "weakness", "value": 4, "target_tags": ["コウモリ", "浮遊"] }
+    }
+  ]
+}

@@ -7,10 +7,14 @@ const {
     isExpired,
     calculateDamage,
     resolveAttack,
-    getCooldownRemainingMs
+    getCooldownRemainingMs,
+    chooseHealingItem,
+    chooseRecommendedItem,
+    resolveItemAction,
+    buildInspectionMessage
 } = require('../src/services/battleService');
 const { parseBattleCustomId } = require('../src/services/battleCustomId');
-const { createBattlePayload } = require('../src/services/battleView');
+const { createBattlePayload, createItemMenuPayload } = require('../src/services/battleView');
 
 test('monster seed has 14 normal monsters, 6 bosses, and reusable mechanic counts', () => {
     const normal = monsters.monsters.filter((monster) => !monster.is_boss);
@@ -39,6 +43,7 @@ test('battle draft snapshots player and monster stats for restart-safe storage',
     assert.equal(draft.player_hp, 34);
     assert.equal(draft.monster_hp, monster.battle.max_hp);
     assert.equal(draft.reward_beans, monster.battle.reward_beans);
+    assert.ok(draft.monster_tags.includes('コーヒー'));
     assert.ok(draft.expires_at > now);
 });
 
@@ -94,7 +99,7 @@ test('battle cooldown only blocks a future challenge', () => {
     assert.equal(getCooldownRemainingMs({ battle_cooldown_until: '2026-07-21T11:59:00.000Z' }, now), 0);
 });
 
-test('phase 1 active battle renders attack and exit buttons', () => {
+test('phase 2 active battle renders exactly attack, item, and inspect buttons', () => {
     const payload = createBattlePayload({
         battle_id: '123e4567-e89b-12d3-a456-426614174000',
         status: 'active',
@@ -105,16 +110,74 @@ test('phase 1 active battle renders attack and exit buttons', () => {
         player_max_hp: 30,
         reward_beans: 3,
         expires_at: '2026-07-21T12:30:00.000Z',
-        last_action_message: null
-    }, new Date('2026-07-21T12:00:00.000Z'));
+        last_action_message: null,
+        inspected: false
+    }, new Date('2026-07-21T12:00:00.000Z'), { hasUsableItems: true });
 
     const buttons = payload.components[0].toJSON().components;
     assert.match(payload.content, /こうげき/);
     assert.deepEqual(buttons.map((button) => button.custom_id), [
         'battle:attack:123e4567-e89b-12d3-a456-426614174000',
-        'battle:cancel:123e4567-e89b-12d3-a456-426614174000'
+        'battle:item:123e4567-e89b-12d3-a456-426614174000',
+        'battle:inspect:123e4567-e89b-12d3-a456-426614174000'
     ]);
     assert.ok(buttons.every((button) => button.disabled === false));
+});
+
+test('phase 2 selects useful items and resolves their one-tap effects', () => {
+    const items = [
+        { item_id: 'small', title: '小さなコーヒー', effect: { kind: 'heal', value: 4, target_tags: [] } },
+        { item_id: 'large', title: '大きなコーヒー', effect: { kind: 'heal', value: 10, target_tags: [] } },
+        { item_id: 'milk', title: '温かいミルク', effect: { kind: 'weakness', value: 5, target_tags: ['コーヒー'] } }
+    ];
+    assert.equal(chooseHealingItem(items, 24, 30).item_id, 'large');
+    assert.equal(chooseRecommendedItem(items, ['コーヒー', '基本敵']).item_id, 'milk');
+
+    const usedItem = resolveItemAction({
+        monster_name: 'エスプレッソ・スライム',
+        monster_hp: 28,
+        monster_attack: 5,
+        player_hp: 20,
+        player_max_hp: 30,
+        player_defense: 2,
+        turn: 0
+    }, items[0], new Date('2026-07-21T12:00:00.000Z'));
+    assert.equal(usedItem.player_hp, 21); // 4回復後、3ダメージの反撃
+    assert.equal(usedItem.status, 'active');
+
+    const menu = createItemMenuPayload({
+        battle_id: '123e4567-e89b-12d3-a456-426614174000',
+        status: 'active',
+        monster_name: 'エスプレッソ・スライム'
+    }, { healingItem: items[0], recommendedItem: items[2] });
+    assert.deepEqual(menu.components[0].toJSON().components.map((button) => button.custom_id), [
+        'battle:heal:123e4567-e89b-12d3-a456-426614174000',
+        'battle:recommend:123e4567-e89b-12d3-a456-426614174000',
+        'battle:back:123e4567-e89b-12d3-a456-426614174000'
+    ]);
+});
+
+test('inspect is limited to one use and makes the next attack stronger', () => {
+    const battle = {
+        monster_name: 'エスプレッソ・スライム',
+        monster_description: 'デミタスカップからあふれるスライム。',
+        monster_inspect_text: 'カップから飛び出した直後は無防備になる。',
+        monster_mechanic_hints: ['今なら弱点を狙えそうだ。'],
+        monster_tags: ['コーヒー'],
+        next_attack_bonus: 3,
+        monster_hp: 28,
+        monster_attack: 5,
+        monster_defense: 1,
+        player_hp: 30,
+        player_attack: 10,
+        player_defense: 2,
+        turn: 0
+    };
+    assert.match(buildInspectionMessage(battle), /温かいミルク/);
+    assert.match(buildInspectionMessage(battle), /次のこうげきのダメージが3増える/);
+    const result = resolveAttack(battle, new Date('2026-07-21T12:00:00.000Z'));
+    assert.equal(result.monster_hp, 16); // (10 + 3) - 1
+    assert.equal(result.next_attack_bonus, 0);
 });
 
 test('expired battles are recognized without relying on bot process memory', () => {

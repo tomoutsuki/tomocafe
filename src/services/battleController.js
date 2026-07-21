@@ -2,9 +2,12 @@ const {
     attackBattle,
     cancelBattle,
     grantBattleReward,
-    applyBattleCooldown
+    applyBattleCooldown,
+    getBattleItemOptions,
+    inspectBattle,
+    useBattleItem
 } = require('./battleService');
-const { createBattlePayload } = require('./battleView');
+const { createBattlePayload, createItemMenuPayload } = require('./battleView');
 const Battle = require('../models/Battle');
 const { parseBattleCustomId } = require('./battleCustomId');
 
@@ -23,22 +26,51 @@ async function handleBattleButton(interaction) {
         return true;
     }
 
-    const result = parsed.action === 'attack'
-        ? await attackBattle(parsed.battleId)
-        : await cancelBattle(parsed.battleId);
+    if (parsed.action === 'item') {
+        const options = await getBattleItemOptions(battle);
+        await interaction.update(createItemMenuPayload(battle, options));
+        return true;
+    }
+
+    if (parsed.action === 'back') {
+        const options = await getBattleItemOptions(battle);
+        await interaction.update(createBattlePayload(battle, new Date(), options));
+        return true;
+    }
+
+    let result;
+    if (parsed.action === 'attack') {
+        result = await attackBattle(parsed.battleId);
+    } else if (parsed.action === 'inspect') {
+        result = await inspectBattle(parsed.battleId);
+    } else if (parsed.action === 'heal' || parsed.action === 'recommend') {
+        result = await useBattleItem(parsed.battleId, parsed.action);
+    } else {
+        // フェーズ1の既存メッセージ上の終了ボタンにも対応する。
+        result = await cancelBattle(parsed.battleId);
+    }
+
     if (!result.changed) {
         if (result.battle?.status === 'timed_out') {
-            await interaction.update(createBattlePayload(result.battle));
+            await interaction.update(await battlePayload(result.battle));
             return true;
         }
         if (result.battle?.status === 'won') {
             const rewardedBattle = await grantBattleReward(result.battle);
-            await interaction.update(createBattlePayload(rewardedBattle));
+            await interaction.update(await battlePayload(rewardedBattle));
             return true;
         }
         if (result.battle?.status === 'lost') {
             await applyBattleCooldown(result.battle);
-            await interaction.update(createBattlePayload(result.battle));
+            await interaction.update(await battlePayload(result.battle));
+            return true;
+        }
+        if (result.alreadyInspected) {
+            await interaction.reply({ content: 'このモンスターは、すでにしらべました。', ephemeral: true });
+            return true;
+        }
+        if (result.itemUnavailable) {
+            await interaction.reply({ content: '使えるアイテムがなくなりました。', ephemeral: true });
             return true;
         }
         await interaction.reply({
@@ -54,8 +86,13 @@ async function handleBattleButton(interaction) {
     } else if (completedBattle.status === 'lost') {
         await applyBattleCooldown(completedBattle);
     }
-    await interaction.update(createBattlePayload(completedBattle));
+    await interaction.update(await battlePayload(completedBattle));
     return true;
+}
+
+async function battlePayload(battle) {
+    const options = await getBattleItemOptions(battle);
+    return createBattlePayload(battle, new Date(), options);
 }
 
 module.exports = {

@@ -1,10 +1,24 @@
 const crypto = require('crypto');
 const Battle = require('../models/Battle');
 const User = require('../models/User');
+const ItemMaster = require('../models/ItemMaster');
 
 const DEFAULT_TIMEOUT_MINUTES = 30;
 const LOCK_STALE_AFTER_MS = 15 * 1000;
 const BATTLE_COOLDOWN_MS = 5 * 60 * 1000;
+
+// 既存の配布アイテムは、マスター移行前でもフェーズ2の回復に使える。
+const BUILTIN_BATTLE_EFFECTS = {
+    welcome_coffee: { kind: 'heal', value: 8, target_tags: [] },
+    warm_milk: { kind: 'weakness', value: 5, target_tags: ['コーヒー'] },
+    sugar_cube: { kind: 'weakness', value: 4, target_tags: ['アルパカ', 'かわいい'] },
+    sticky_syrup: { kind: 'weakness', value: 4, target_tags: ['コウモリ', '浮遊'] }
+};
+const BUILTIN_BATTLE_ITEM_LABELS = {
+    warm_milk: '温かいミルク',
+    sugar_cube: '角砂糖',
+    sticky_syrup: 'とろとろシロップ'
+};
 
 function getBattleTimeoutMs() {
     const minutes = Number(process.env.BATTLE_TIMEOUT_MINUTES || DEFAULT_TIMEOUT_MINUTES);
@@ -32,6 +46,10 @@ function createBattleDraft({ player, playerId, monster, guildId, channelId, now 
         channel_id: channelId || null,
         monster_id: monster.monster_id,
         monster_name: monster.name_ja,
+        monster_description: monster.appearance || monster.behavior || '',
+        monster_inspect_text: monster.inspect_text || '',
+        monster_tags: [...new Set([...(monster.tags || []), monster.category].filter(Boolean))],
+        monster_mechanic_hints: (monster.mechanics || []).map((mechanic) => mechanic.hint).filter(Boolean),
         monster_max_hp: maxHp,
         monster_hp: maxHp,
         monster_attack: monster.battle.attack,
@@ -85,7 +103,8 @@ function calculateDamage(attack, defense) {
 }
 
 function resolveAttack(battle, now = new Date()) {
-    const playerDamage = calculateDamage(battle.player_attack, battle.monster_defense);
+    const insightBonus = Math.max(0, Number(battle.next_attack_bonus) || 0);
+    const playerDamage = calculateDamage(battle.player_attack + insightBonus, battle.monster_defense);
     const monsterHp = Math.max(0, battle.monster_hp - playerDamage);
     const nextTurn = battle.turn + 1;
 
@@ -96,7 +115,8 @@ function resolveAttack(battle, now = new Date()) {
             turn: nextTurn,
             status: 'won',
             finished_at: now,
-            last_action_message: `あなたのこうげき！ ${battle.monster_name} に ${playerDamage} ダメージ！ 倒した！`
+            next_attack_bonus: 0,
+            last_action_message: `あなたのこうげき！ ${battle.monster_name} に ${playerDamage} ダメージ！${insightBonus ? ' 調査のひらめきが効いた！' : ''} 倒した！`
         };
     }
 
@@ -110,10 +130,125 @@ function resolveAttack(battle, now = new Date()) {
         turn: nextTurn,
         status: lost ? 'lost' : 'active',
         finished_at: lost ? now : null,
+        next_attack_bonus: 0,
         last_action_message: lost
-            ? `あなたのこうげき！ ${battle.monster_name} に ${playerDamage} ダメージ！\n${battle.monster_name} の反撃！ ${monsterDamage} ダメージを受け、力尽きた…。`
-            : `あなたのこうげき！ ${battle.monster_name} に ${playerDamage} ダメージ！\n${battle.monster_name} の反撃！ ${monsterDamage} ダメージを受けた。`
+            ? `あなたのこうげき！ ${battle.monster_name} に ${playerDamage} ダメージ！${insightBonus ? ' 調査のひらめきが効いた！' : ''}\n${battle.monster_name} の反撃！ ${monsterDamage} ダメージを受け、力尽きた…。`
+            : `あなたのこうげき！ ${battle.monster_name} に ${playerDamage} ダメージ！${insightBonus ? ' 調査のひらめきが効いた！' : ''}\n${battle.monster_name} の反撃！ ${monsterDamage} ダメージを受けた。`
     };
+}
+
+function battleItemEffect(item) {
+    return item?.battle_effect || BUILTIN_BATTLE_EFFECTS[item?.item_id] || null;
+}
+
+function chooseHealingItem(items, playerHp, playerMaxHp) {
+    const missingHp = Math.max(0, playerMaxHp - playerHp);
+    const healingItems = items.filter((item) => item.effect?.kind === 'heal');
+    if (healingItems.length === 0 || missingHp === 0) return null;
+
+    return healingItems
+        .sort((a, b) => a.effect.value - b.effect.value)
+        .find((item) => item.effect.value >= missingHp)
+        || healingItems[healingItems.length - 1];
+}
+
+function chooseRecommendedItem(items, monsterTags) {
+    const tagSet = new Set(monsterTags || []);
+    return items
+        .filter((item) => item.effect?.kind === 'weakness')
+        .filter((item) => (item.effect.target_tags || []).some((tag) => tagSet.has(tag)))
+        .sort((a, b) => b.effect.value - a.effect.value)[0] || null;
+}
+
+async function getBattleItemsForUser(user) {
+    const inventory = (user?.items || []).filter((entry) => entry.quantity > 0);
+    if (inventory.length === 0) return [];
+
+    const itemIds = inventory.map((entry) => entry.item_id);
+    const masters = await ItemMaster.find({ item_id: { $in: itemIds } }).lean();
+    const mastersById = new Map(masters.map((item) => [item.item_id, item]));
+
+    return inventory.map((entry) => {
+        const master = mastersById.get(entry.item_id) || { item_id: entry.item_id, title: entry.item_id };
+        return {
+            item_id: entry.item_id,
+            quantity: entry.quantity,
+            title: master.title || entry.item_id,
+            effect: battleItemEffect(master)
+        };
+    }).filter((item) => item.effect);
+}
+
+async function getBattleItemOptions(battle) {
+    const user = await User.findOne({ user_id: battle.player_id });
+    if (!user) return { healingItem: null, recommendedItem: null, hasUsableItems: false };
+
+    const items = await getBattleItemsForUser(user);
+    const healingItem = chooseHealingItem(items, battle.player_hp, battle.player_max_hp);
+    const recommendedItem = chooseRecommendedItem(items, battle.monster_tags);
+    return {
+        healingItem,
+        recommendedItem,
+        hasUsableItems: Boolean(healingItem || recommendedItem)
+    };
+}
+
+function resolveItemAction(battle, item, now = new Date()) {
+    const effect = item.effect;
+    const nextTurn = battle.turn + 1;
+    let monsterHp = battle.monster_hp;
+    let playerHp = battle.player_hp;
+    let actionMessage;
+
+    if (effect.kind === 'heal') {
+        const healedAmount = Math.min(effect.value, battle.player_max_hp - playerHp);
+        playerHp += healedAmount;
+        actionMessage = `${item.title} を使った！ HPが ${healedAmount} 回復した。`;
+    } else {
+        monsterHp = Math.max(0, monsterHp - effect.value);
+        actionMessage = `${item.title} を使った！ ${battle.monster_name} に ${effect.value} ダメージ！`;
+        if (monsterHp === 0) {
+            return {
+                monster_hp: 0,
+                player_hp: playerHp,
+                turn: nextTurn,
+                status: 'won',
+                finished_at: now,
+                last_action_message: `${actionMessage} 倒した！`
+            };
+        }
+    }
+
+    const monsterDamage = calculateDamage(battle.monster_attack, battle.player_defense);
+    playerHp = Math.max(0, playerHp - monsterDamage);
+    const lost = playerHp === 0;
+    return {
+        monster_hp: monsterHp,
+        player_hp: playerHp,
+        turn: nextTurn,
+        status: lost ? 'lost' : 'active',
+        finished_at: lost ? now : null,
+        last_action_message: lost
+            ? `${actionMessage}\n${battle.monster_name} の反撃！ ${monsterDamage} ダメージを受け、力尽きた…。`
+            : `${actionMessage}\n${battle.monster_name} の反撃！ ${monsterDamage} ダメージを受けた。`
+    };
+}
+
+function buildInspectionMessage(battle) {
+    const hints = battle.monster_mechanic_hints?.length > 0
+        ? battle.monster_mechanic_hints.join(' ')
+        : 'まだ大きな動きは見えない。';
+    const tagSet = new Set(battle.monster_tags || []);
+    const effectiveItems = Object.entries(BUILTIN_BATTLE_EFFECTS)
+        .filter(([, effect]) => effect.kind === 'weakness' && effect.target_tags.some((tag) => tagSet.has(tag)))
+        .map(([itemId]) => BUILTIN_BATTLE_ITEM_LABELS[itemId] || itemId);
+    return [
+        `しらべた！ ${battle.monster_description || `${battle.monster_name}の様子は不思議だ。`}`,
+        `弱点：${battle.monster_inspect_text || '手持ちのアイテムを試してみよう。'}`,
+        `有効なアイテム：${effectiveItems.length > 0 ? effectiveItems.join('、') : '手持ちのアイテムを試してみよう。'}`,
+        `特殊行動のヒント：${hints}`,
+        '調査のひらめきで、次のこうげきのダメージが3増える！'
+    ].join('\n');
 }
 
 async function createSoloBattle({ player, playerId, monster, guildId, channelId, now = new Date() }) {
@@ -237,6 +372,66 @@ async function attackBattle(battleId, now = new Date()) {
     return { changed: true, battle };
 }
 
+async function inspectBattle(battleId, now = new Date()) {
+    const lockedBattle = await acquireActionLock(battleId, now);
+    if (!lockedBattle) {
+        return { changed: false, battle: await Battle.findOne({ battle_id: battleId }) };
+    }
+    if (lockedBattle.inspected) {
+        await Battle.updateOne(
+            { _id: lockedBattle._id, action_lock: true },
+            { $set: { action_lock: false, action_locked_at: null } }
+        );
+        return { changed: false, alreadyInspected: true, battle: lockedBattle };
+    }
+
+    const inspectionMessage = buildInspectionMessage(lockedBattle);
+    const battle = await finishBattle(lockedBattle, {
+        inspected: true,
+        next_attack_bonus: 3,
+        inspection_message: inspectionMessage,
+        last_action_message: '相手の様子をしっかり観察した。'
+    });
+    return { changed: true, battle };
+}
+
+async function releaseBattleLock(battle) {
+    await Battle.updateOne(
+        { _id: battle._id, action_lock: true },
+        { $set: { action_lock: false, action_locked_at: null } }
+    );
+}
+
+async function useBattleItem(battleId, useType, now = new Date()) {
+    const lockedBattle = await acquireActionLock(battleId, now);
+    if (!lockedBattle) {
+        return { changed: false, battle: await Battle.findOne({ battle_id: battleId }) };
+    }
+
+    const options = await getBattleItemOptions(lockedBattle);
+    const item = useType === 'heal' ? options.healingItem : options.recommendedItem;
+    if (!item) {
+        await releaseBattleLock(lockedBattle);
+        return { changed: false, itemUnavailable: true, battle: lockedBattle };
+    }
+
+    const consumedUser = await User.findOneAndUpdate(
+        {
+            user_id: lockedBattle.player_id,
+            items: { $elemMatch: { item_id: item.item_id, quantity: { $gt: 0 } } }
+        },
+        { $inc: { 'items.$.quantity': -1 } },
+        { new: true }
+    );
+    if (!consumedUser) {
+        await releaseBattleLock(lockedBattle);
+        return { changed: false, itemUnavailable: true, battle: lockedBattle };
+    }
+
+    const battle = await finishBattle(lockedBattle, resolveItemAction(lockedBattle, item, now));
+    return { changed: true, battle, item };
+}
+
 async function grantBattleReward(battle, now = new Date()) {
     if (battle.status !== 'won') return battle;
     if (battle.reward_claimed) return battle;
@@ -298,6 +493,12 @@ module.exports = {
     getCooldownRemainingMs,
     calculateDamage,
     resolveAttack,
+    battleItemEffect,
+    chooseHealingItem,
+    chooseRecommendedItem,
+    resolveItemAction,
+    buildInspectionMessage,
+    BUILTIN_BATTLE_EFFECTS,
     isExpired,
     expireStaleBattles,
     findActiveBattleForPlayer,
@@ -305,6 +506,9 @@ module.exports = {
     saveBattleMessageId,
     cancelBattle,
     attackBattle,
+    inspectBattle,
+    useBattleItem,
+    getBattleItemOptions,
     grantBattleReward,
     applyBattleCooldown,
     BATTLE_COOLDOWN_MS

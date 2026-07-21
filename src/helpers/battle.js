@@ -2,7 +2,8 @@ const User = require('../models/User');
 const Monster = require('../models/Monster');
 const {
     createSoloBattle,
-    saveBattleMessageId
+    saveBattleMessageId,
+    getBattleItemOptions
 } = require('../services/battleService');
 const { createBattlePayload } = require('../services/battleView');
 
@@ -44,6 +45,7 @@ module.exports = async (message) => {
         return;
     }
 
-    const reply = await message.reply(createBattlePayload(battle));
+    const itemOptions = await getBattleItemOptions(battle);
+    const reply = await message.reply(createBattlePayload(battle, new Date(), itemOptions));
     await saveBattleMessageId(battle.battle_id, reply.id);
 };

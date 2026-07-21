@@ -17,6 +17,9 @@
     "monsters:seed": "node src/scripts/seedMonsters.js",
     "monsters:seed:dev": "node src/scripts/seedMonsters.js --app-env=development",
     "monsters:seed:prod": "node src/scripts/seedMonsters.js --app-env=production",
+    "battle-items:seed": "node src/scripts/seedBattleItems.js",
+    "battle-items:seed:dev": "node src/scripts/seedBattleItems.js --app-env=development",
+    "battle-items:seed:prod": "node src/scripts/seedBattleItems.js --app-env=production",
     "test": "node --test"
   },
   "repository": {

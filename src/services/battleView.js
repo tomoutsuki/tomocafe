@@ -16,7 +16,7 @@ function battleStatusText(battle) {
     return '「こうげき」を押して、カフェモンスターを追い払おう！';
 }
 
-function createBattleComponents(battle) {
+function createBattleComponents(battle, { hasUsableItems = false } = {}) {
     const isActive = battle.status === 'active';
     return [
         new ActionRowBuilder().addComponents(
@@ -26,15 +26,20 @@ function createBattleComponents(battle) {
                 .setStyle(ButtonStyle.Danger)
                 .setDisabled(!isActive),
             new ButtonBuilder()
-                .setCustomId(`battle:cancel:${battle.battle_id}`)
-                .setLabel('戦闘を終了')
+                .setCustomId(`battle:item:${battle.battle_id}`)
+                .setLabel('アイテム')
                 .setStyle(ButtonStyle.Secondary)
-                .setDisabled(!isActive)
+                .setDisabled(!isActive || !hasUsableItems),
+            new ButtonBuilder()
+                .setCustomId(`battle:inspect:${battle.battle_id}`)
+                .setLabel('しらべる')
+                .setStyle(ButtonStyle.Primary)
+                .setDisabled(!isActive || battle.inspected)
         )
     ];
 }
 
-function createBattlePayload(battle, now = new Date()) {
+function createBattlePayload(battle, now = new Date(), options = {}) {
     const timeText = battle.status === 'active'
         ? `残り時間：約${remainingMinutes(battle.expires_at, now)}分`
         : 'この戦闘は終了しています。';
@@ -46,14 +51,51 @@ function createBattlePayload(battle, now = new Date()) {
             `プレイヤーHP：${battle.player_hp} / ${battle.player_max_hp}`,
             `報酬予定：${battle.reward_beans}豆`,
             timeText,
+            battle.inspection_message,
             battle.last_action_message,
             battleStatusText(battle)
         ].filter(Boolean).join('\n'),
-        components: createBattleComponents(battle)
+        components: createBattleComponents(battle, options)
+    };
+}
+
+function createItemMenuPayload(battle, options) {
+    const isActive = battle.status === 'active';
+    const healingLabel = options.healingItem
+        ? `回復する（${options.healingItem.title} ×${options.healingItem.quantity}）`
+        : '回復する';
+    const recommendedLabel = options.recommendedItem
+        ? `おすすめを使う（${options.recommendedItem.title} ×${options.recommendedItem.quantity}）`
+        : 'おすすめを使う';
+    return {
+        content: [
+            `☕ **${battle.monster_name}** との戦闘：アイテムを選んでね。`,
+            'アイテム使用後、相手が生きていれば反撃されます。'
+        ].join('\n'),
+        components: [
+            new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`battle:heal:${battle.battle_id}`)
+                    .setLabel(healingLabel.slice(0, 80))
+                    .setStyle(ButtonStyle.Success)
+                    .setDisabled(!isActive || !options.healingItem),
+                new ButtonBuilder()
+                    .setCustomId(`battle:recommend:${battle.battle_id}`)
+                    .setLabel(recommendedLabel.slice(0, 80))
+                    .setStyle(ButtonStyle.Primary)
+                    .setDisabled(!isActive || !options.recommendedItem),
+                new ButtonBuilder()
+                    .setCustomId(`battle:back:${battle.battle_id}`)
+                    .setLabel('戻る')
+                    .setStyle(ButtonStyle.Secondary)
+                    .setDisabled(!isActive)
+            )
+        ]
     };
 }
 
 module.exports = {
     createBattlePayload,
+    createItemMenuPayload,
     remainingMinutes
 };
