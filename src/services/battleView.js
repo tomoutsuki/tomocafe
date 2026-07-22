@@ -5,6 +5,7 @@ const {
     EmbedBuilder
 } = require('discord.js');
 const monsterImages = require('../data/monsterImages');
+const { normalizedR2Url } = require('./monsterImageUrls');
 
 const EMOJI = {
     green_begin: '<:green_begin:1529244043819880489>',
@@ -67,19 +68,28 @@ function createPlayerEmbed(battle) {
         .setDescription(`HP ${createHpBar(battle.player_hp, battle.player_max_hp)} **${battle.player_hp} / ${battle.player_max_hp}**`);
 }
 
-function createMonsterEmbed(battle) {
+function resolveMonsterImageUrl(battle) {
     // R2 の公開パスが未反映・未確認なら、従来の画像を使う。通常画像の確認は
     // 起動時に行われ、確認でき次第 has_default_image が true になって R2 へ切り替わる。
-    const imageUrl = battle.show_damage_image && battle.has_damage_diff && battle.monster_damage_image_url
+    return battle.show_damage_image && battle.has_damage_diff && battle.monster_damage_image_url
         ? battle.monster_damage_image_url
         : battle.has_default_image
             ? battle.monster_image_url
             : monsterImages[battle.monster_id] || battle.monster_image_url;
+}
+
+function createMonsterAppearanceEmbed(battle) {
+    const imageUrl = resolveMonsterImageUrl(battle);
+    const embed = new EmbedBuilder().setColor(battle.show_damage_image ? '#d96b6b' : '#6f4e37');
+    if (imageUrl) embed.setThumbnail(imageUrl);
+    return embed;
+}
+
+function createMonsterStatusEmbed(battle) {
     const embed = new EmbedBuilder()
         .setColor(battle.show_damage_image ? '#d96b6b' : '#6f4e37')
         .setTitle(`☕ ${battle.monster_name}`)
         .setDescription(`HP ${createHpBar(battle.monster_hp, battle.monster_max_hp)} **${battle.monster_hp} / ${battle.monster_max_hp}**`);
-    if (imageUrl) embed.setThumbnail(imageUrl);
     return embed;
 }
 
@@ -97,7 +107,8 @@ function createBattleLogEmbed(battle, { mainLog } = {}) {
 function createBattleEmbeds(battle, options = {}) {
     return [
         createPlayerEmbed(battle),
-        createMonsterEmbed(battle),
+        createMonsterAppearanceEmbed(battle),
+        createMonsterStatusEmbed(battle),
         createBattleLogEmbed(battle, options)
     ];
 }
@@ -111,8 +122,8 @@ function grayButton(customId, label, emoji, disabled = false) {
         .setDisabled(disabled);
 }
 
-function createBattleComponents(battle, { hasUsableItems = false } = {}) {
-    const isActive = battle.status === 'active';
+function createBattleComponents(battle, { hasUsableItems = false, disableActions = false } = {}) {
+    const isActive = battle.status === 'active' && !disableActions;
     return [new ActionRowBuilder().addComponents(
         grayButton(`battle:attack:${battle.battle_id}`, 'こうげき', '⚔️', !isActive),
         grayButton(`battle:item:${battle.battle_id}`, 'アイテム', '🎒', !isActive || !hasUsableItems),
@@ -122,19 +133,47 @@ function createBattleComponents(battle, { hasUsableItems = false } = {}) {
 
 function createBattlePayload(battle, now = new Date(), options = {}) {
     if (battle.status === 'won') return createVictoryPayload(battle);
-    return { content: '', embeds: createBattleEmbeds(battle), components: createBattleComponents(battle, options) };
+    if (battle.status === 'lost') return createDefeatPayload(battle);
+    return {
+        content: '',
+        embeds: createBattleEmbeds(battle, { mainLog: options.mainLog }),
+        components: createBattleComponents(battle, options)
+    };
+}
+
+function stampUrl(filename) {
+    const r2Url = normalizedR2Url();
+    return r2Url ? `${r2Url}/stamps/${filename}.png` : null;
+}
+
+function createResultPayload(battle, { title, color, stamp, fallbackMessage }) {
+    const embed = new EmbedBuilder()
+        .setColor(color)
+        .setTitle(title)
+        .setDescription(`**${battle.last_action_message || fallbackMessage}**`);
+    const stampImageUrl = stampUrl(stamp);
+    const embeds = stampImageUrl
+        ? [new EmbedBuilder().setImage(stampImageUrl), embed]
+        : [embed];
+    return { content: '', embeds, components: [] };
 }
 
 function createVictoryPayload(battle) {
-    const imageUrl = battle.has_default_image
-        ? battle.monster_image_url
-        : monsterImages[battle.monster_id] || battle.monster_image_url;
-    const embed = new EmbedBuilder()
-        .setColor('#d8a24a')
-        .setTitle('🎉 戦闘勝利！')
-        .setDescription(`**${battle.last_action_message || `${battle.monster_name}を倒した！`}**`);
-    if (imageUrl) embed.setThumbnail(imageUrl);
-    return { content: '', embeds: [embed], components: [] };
+    return createResultPayload(battle, {
+        title: '🎉 戦闘勝利！',
+        color: '#d8a24a',
+        stamp: 'shouri',
+        fallbackMessage: `${battle.monster_name}を倒した！`
+    });
+}
+
+function createDefeatPayload(battle) {
+    return createResultPayload(battle, {
+        title: '💤 戦闘敗北…',
+        color: '#6b7280',
+        stamp: 'haiboku',
+        fallbackMessage: '力尽きてしまった…。'
+    });
 }
 
 function createItemMenuPayload(battle, options) {
@@ -175,9 +214,12 @@ module.exports = {
     EMOJI,
     createBattlePayload,
     createVictoryPayload,
+    createDefeatPayload,
     createItemMenuPayload,
     createSpecialReactionPayload,
     createBattleEmbeds,
+    createMonsterAppearanceEmbed,
+    createMonsterStatusEmbed,
     createHpBar,
     compactLog,
     recentLogLines,

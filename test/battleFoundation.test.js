@@ -137,8 +137,8 @@ test('phase 2 active battle renders exactly attack, item, and inspect buttons', 
     }, new Date('2026-07-21T12:00:00.000Z'), { hasUsableItems: true });
 
     const buttons = payload.components[0].toJSON().components;
-    assert.equal(payload.embeds.length, 3);
-    const logEmbed = payload.embeds[2].toJSON();
+    assert.equal(payload.embeds.length, 4);
+    const logEmbed = payload.embeds[3].toJSON();
     const monsterEmbed = payload.embeds[1].toJSON();
     assert.match(logEmbed.description, /^\*\*/);
     assert.equal(monsterEmbed.thumbnail?.url || monsterEmbed.image?.url, 'https://i.imgur.com/3kNNOnu.png');
@@ -328,7 +328,7 @@ test('battle embed keeps only the current turn message and asks for the next act
             { message: '今回のこうげき！ 9ダメージ！' }
         ]
     });
-    const embed = payload.embeds[2].toJSON();
+    const embed = payload.embeds[3].toJSON();
     assert.equal(createHpBar(24, 30), `${EMOJI.green_begin}${EMOJI.green_middle}${EMOJI.green_middle}${EMOJI.green_end}`);
     assert.equal(createHpBar(1, 30), `${EMOJI.red_begin}${EMOJI.gray_middle}${EMOJI.gray_middle}${EMOJI.gray_end}`);
     assert.equal(createHpBar(0, 30), `${EMOJI.gray_begin}${EMOJI.gray_middle}${EMOJI.gray_middle}${EMOJI.gray_end}`);
@@ -360,7 +360,36 @@ test('unverified R2 image uses the legacy thumbnail, then switches after verific
     assert.equal(r2Thumbnail, 'https://assets.example.test/default/expresso_slime.png');
 });
 
+test('battle layout separates monster thumbnail, monster status, and damage diff', () => {
+    const payload = createBattlePayload({
+        battle_id: '123e4567-e89b-12d3-a456-426614174000',
+        status: 'active',
+        monster_id: 'expresso_slime',
+        monster_name: 'エスプレッソ・スライム',
+        monster_image_url: 'https://assets.example.test/default/expresso_slime.png',
+        monster_damage_image_url: 'https://assets.example.test/damage/expresso_slime.png',
+        has_default_image: true,
+        has_damage_diff: true,
+        show_damage_image: true,
+        monster_hp: 19,
+        monster_max_hp: 28,
+        player_hp: 24,
+        player_max_hp: 30,
+        expires_at: '2026-07-21T12:30:00.000Z',
+        inspected: false
+    });
+    const appearance = payload.embeds[1].toJSON();
+    const monsterStatus = payload.embeds[2].toJSON();
+
+    assert.equal(payload.embeds.length, 4);
+    assert.equal(appearance.thumbnail.url, 'https://assets.example.test/damage/expresso_slime.png');
+    assert.equal(monsterStatus.title, '☕ エスプレッソ・スライム');
+    assert.equal(monsterStatus.thumbnail, undefined);
+});
+
 test('victory replaces the battle screen with one victory embed and no buttons', () => {
+    const previousR2Url = process.env.R2_URL;
+    process.env.R2_URL = 'https://assets.example.test/';
     const payload = createBattlePayload({
         battle_id: '123e4567-e89b-12d3-a456-426614174000',
         status: 'won',
@@ -369,10 +398,21 @@ test('victory replaces the battle screen with one victory embed and no buttons',
         monster_image_url: 'https://assets.example.test/default/expresso_slime.png',
         last_action_message: '勝利！ 報酬として 3豆を受け取った！'
     });
+    const defeatPayload = createBattlePayload({
+        battle_id: '123e4567-e89b-12d3-a456-426614174000',
+        status: 'lost',
+        monster_name: 'エスプレッソ・スライム',
+        last_action_message: '力尽きてしまった…。'
+    });
+    if (previousR2Url === undefined) delete process.env.R2_URL;
+    else process.env.R2_URL = previousR2Url;
 
-    assert.equal(payload.embeds.length, 1);
+    assert.equal(payload.embeds.length, 2);
     assert.deepEqual(payload.components, []);
-    assert.equal(payload.embeds[0].toJSON().title, '🎉 戦闘勝利！');
+    assert.equal(payload.embeds[0].toJSON().image.url, 'https://assets.example.test/stamps/shouri.png');
+    assert.equal(payload.embeds.at(-1).toJSON().title, '🎉 戦闘勝利！');
+    assert.equal(defeatPayload.embeds[0].toJSON().image.url, 'https://assets.example.test/stamps/haiboku.png');
+    assert.equal(defeatPayload.embeds.at(-1).toJSON().title, '💤 戦闘敗北…');
 });
 
 test('expired battles are recognized without relying on bot process memory', () => {

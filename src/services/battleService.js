@@ -570,7 +570,7 @@ async function finishBattle(battle, changes) {
     return updatedBattle || Battle.findById(battle._id);
 }
 
-async function attackBattle(battleId, now = new Date()) {
+async function prepareAttackBattle(battleId, now = new Date()) {
     const lockedBattle = await acquireActionLock(battleId, now);
     if (!lockedBattle) {
         const currentBattle = await Battle.findOne({ battle_id: battleId });
@@ -584,9 +584,21 @@ async function attackBattle(battleId, now = new Date()) {
         return { changed: false, battle: currentBattle };
     }
 
-    const changes = prepareSpecialReaction(lockedBattle, resolveAttack(lockedBattle, now));
-    const battle = await finishBattle(lockedBattle, changes);
-    return { changed: true, battle };
+    return {
+        changed: true,
+        battle: lockedBattle,
+        changes: prepareSpecialReaction(lockedBattle, resolveAttack(lockedBattle, now))
+    };
+}
+
+async function completePreparedAttack(preparedBattle, changes) {
+    return finishBattle(preparedBattle, changes);
+}
+
+async function attackBattle(battleId, now = new Date()) {
+    const prepared = await prepareAttackBattle(battleId, now);
+    if (!prepared.changed) return prepared;
+    return { changed: true, battle: await completePreparedAttack(prepared.battle, prepared.changes) };
 }
 
 async function inspectBattle(battleId, now = new Date()) {
@@ -751,6 +763,8 @@ module.exports = {
     createSoloBattle,
     saveBattleMessageId,
     cancelBattle,
+    prepareAttackBattle,
+    completePreparedAttack,
     attackBattle,
     inspectBattle,
     useBattleItem,
