@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark">
+    <title>ゲームデータ | 友カフェちゃんBOT</title>
+    <link rel="stylesheet" href="/css/game-data.css">
+</head>
+<body>
+    <main class="game-data-page" id="game-data-app">
+        <header class="page-header">
+            <div class="page-title-row">
+                <span class="page-mark" aria-hidden="true">☕</span>
+                <div>
+                    <h1>ゲームデータ</h1>
+                    <p>モンスターとアイテムのデータを管理します</p>
+                </div>
+            </div>
+        </header>
+
+        <section class="database-header" aria-label="データ管理">
+            <div class="view-tabs" role="tablist" aria-label="データ種別">
+                <button class="view-tab" type="button" role="tab" aria-selected="true" aria-controls="database-table" data-view="monsters">
+                    <span aria-hidden="true">♟</span>モンスター
+                </button>
+                <button class="view-tab" type="button" role="tab" aria-selected="false" aria-controls="database-table" data-view="items">
+                    <span aria-hidden="true">◇</span>アイテム
+                </button>
+            </div>
+            <div class="database-toolbar" aria-label="テーブル操作">
+                <div class="search-control" id="search-control">
+                    <label class="sr-only" for="table-search">データを検索</label>
+                    <input id="table-search" type="search" placeholder="名前、ID、説明を検索" autocomplete="off">
+                    <button class="icon-button" id="search-close" type="button" aria-label="検索を閉じる" title="検索を閉じる">×</button>
+                </div>
+                <button class="icon-button" id="search-toggle" type="button" aria-label="検索" title="検索">⌕</button>
+                <div class="popover-anchor">
+                    <button class="icon-button toolbar-with-count" id="filter-toggle" type="button" aria-label="フィルター" title="フィルター">▽<span class="toolbar-count" hidden></span></button>
+                    <div class="popover filter-popover" id="filter-popover" hidden></div>
+                </div>
+                <div class="popover-anchor">
+                    <button class="icon-button" id="sort-toggle" type="button" aria-label="並べ替え" title="並べ替え">↕</button>
+                    <div class="popover" id="sort-popover" hidden></div>
+                </div>
+                <div class="popover-anchor">
+                    <button class="icon-button" id="columns-toggle" type="button" aria-label="表示列を設定" title="表示列を設定">☷</button>
+                    <div class="popover" id="columns-popover" hidden></div>
+                </div>
+                <button class="icon-button" id="reload-data" type="button" aria-label="再読み込み" title="再読み込み">↻</button>
+                <button class="new-record-button" id="new-record" type="button">＋ 新規作成</button>
+            </div>
+        </section>
+
+        <div class="error-banner" id="table-error" role="alert" hidden>
+            <span id="table-error-message"></span><button type="button" id="retry-data">再試行</button>
+        </div>
+
+        <section class="table-shell" aria-label="ゲームデータテーブル">
+            <div class="table-scroll" tabindex="0" id="table-scroll">
+                <table class="database-table" id="database-table">
+                    <thead id="table-head"></thead>
+                    <tbody id="table-body"></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <aside class="detail-panel" id="detail-panel" aria-label="レコード詳細" aria-hidden="true" hidden>
+        <div class="detail-panel-header">
+            <button class="icon-button mobile-back" id="detail-close" type="button" aria-label="詳細を閉じる">←</button>
+            <span class="detail-panel-label">レコード詳細</span>
+            <button class="icon-button" id="detail-close-desktop" type="button" aria-label="詳細を閉じる">×</button>
+        </div>
+        <form id="detail-form" novalidate></form>
+    </aside>
+
+    <div class="image-preview" id="image-preview" role="dialog" aria-modal="true" aria-label="画像プレビュー" hidden>
+        <button class="icon-button preview-close" type="button" aria-label="画像プレビューを閉じる">×</button>
+        <img id="preview-image" alt="">
+    </div>
+    <div class="popover drop-popover" id="drop-popover" role="dialog" aria-label="残りのドロップ" hidden></div>
+    <div class="confirm-dialog" id="delete-dialog" role="alertdialog" aria-modal="true" aria-labelledby="delete-dialog-title" hidden>
+        <div class="confirm-dialog-content">
+            <h2 id="delete-dialog-title">レコードを削除しますか？</h2>
+            <p>この操作は取り消せません。</p>
+            <div class="dialog-actions"><button type="button" id="delete-cancel">キャンセル</button><button type="button" class="danger-button" id="delete-confirm">削除</button></div>
+        </div>
+    </div>
+    <script src="/js/game-data.js" defer></script>
+</body>
+</html>

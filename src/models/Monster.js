@@ -17,6 +17,8 @@ const MonsterSchema = new mongoose.Schema({
     name_en: String,
     is_boss: { type: Boolean, default: false, index: true },
     rarity: { type: String, enum: ['common', 'uncommon', 'rare', 'boss'], required: true },
+    // 管理画面から公開を一時停止するためのフラグ。既存データは true として扱う。
+    is_enabled: { type: Boolean, default: true, index: true },
     difficulty: { type: Number, min: 1, max: 5, required: true },
     category: String,
     battle_role: String,
@@ -32,6 +34,7 @@ const MonsterSchema = new mongoose.Schema({
     defeat_text: { type: String, required: true },
     inspect_text: { type: String, required: true },
     tags: { type: [String], default: [] },
+    drops: { type: [String], default: [] },
     battle: {
         max_hp: { type: Number, min: 1, required: true },
         attack: { type: Number, min: 1, required: true },

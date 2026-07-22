@@ -13,10 +13,16 @@ const ItemMasterSchema = new mongoose.Schema({
 	item_id: { type: String, unique: true },
 	title: String,
 	description: String,
+	category: { type: String, default: '' },
+	acquisition_method: { type: String, default: '' },
 	rarity: { type: String, enum: ['ノーマル', 'レア', 'スーパーレア', 'ウルトラレア'], default: 'ノーマル' },
+	is_enabled: { type: Boolean, default: true, index: true },
 	image_url: String, // アイテム画像のURL
 	market_price: { type: Number, default: 0 }, // ショップ価格
 	battle_effect: { type: BattleEffectSchema, default: null }
+}, {
+	timestamps: true,
+	versionKey: false
 });
 
 const ItemMaster = mongoose.model('ItemMaster', ItemMasterSchema, 'item_master');
